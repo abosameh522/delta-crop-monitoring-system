@@ -129,6 +129,11 @@ ndvi        = (nir − red) / (nir + red)   # red, nir already in reflectance
    DN < 1000 (harmonized evidence) and ≥ 99.9 % of NDVI in `[-1, 1]`.
 3. Dedupe: when two baselines exist for one `(tile, date)`, the highest baseline is selected and its
    asset is 10 m.
+4. Cross-era sanity check: a **fixed 1 km reference box of open water** inside the AOI (chosen in
+   Phase 3 from WorldCover class 80 pixels that stay water in every season) is sampled in the same
+   calendar week (1–7 July) of **2019 and 2023**. Require ≥ 1 000 valid water pixels in each year and:
+   `|Δ median red reflectance| ≤ 0.02` and `|Δ median NDVI| ≤ 0.05`. A failure means the radiometry is
+   not comparable across eras and blocks Phase 3.
 
 Earth Search's newer `sentinel-2-c1-l2a` collection has consistent metadata but **zero scenes for
 2022 over this AOI** (verified), so it cannot replace the legacy collection for our 5-year baseline.
@@ -162,6 +167,13 @@ data/gold/
 
 - **100 m cells, EPSG:32636**, origin snapped to the AOI's south-west corner in UTM. 478 × 498 ≈
   **238 000 cells**.
+- **Why 238k and not 250k:** the earlier 500 × 500 = 250 000 figure assumed a full 50.0 × 50.0 km
+  square. The approved AOI is **47.72 km east–west × 49.76 km north–south**, and the grid is clipped
+  to that rectangle after reprojection to UTM 36N: `ceil(47.72 / 0.1) = 478` columns ×
+  `ceil(49.76 / 0.1) = 498` rows = **238 044 cells**. The UTM envelope differs from the WGS84 bbox by
+  under 100 m per edge; the origin is snapped outward and partial edge cells are **retained**, not
+  dropped, so no cropland on the AOI boundary is lost. Every row-count estimate on this page uses
+  238 000 cells, never 250 000.
 - NDVI is computed at native **10 m**, then mean-aggregated to 100 m; the SCL mask (native 20 m) is
   upsampled to 10 m for masking.
 - Why not 10 m/20 m: 20 m → 6.25 M cells per date, ~1.5 B rows over 5 years — too heavy for a laptop.
@@ -202,6 +214,7 @@ Measured over the AOI:
 
 Limitations: WorldCover is a **2021 static snapshot**, so land-use change after 2021 and mixed 100 m
 cells introduce classification error. `is_cropland` is nullable when the mask has no coverage.
+Attribution requirement: the README (Phase 9) must credit **ESA WorldCover 10 m 2021 v200, CC BY 4.0**.
 
 ### 3.7 Cloud filter and weekly sampling
 
@@ -230,6 +243,8 @@ cloudy pixels that the looser filter lets in. The 20 % filter is kept as a confi
 - Anomaly requires a non-null current-week value **and** a baseline mean from **≥ 3 baseline years**;
   otherwise `anomaly = NULL` with `status = 'no_baseline'`.
 - Weather is always complete (Open-Meteo reanalysis), so missing weather is a hard error, not a null.
+- **Phase 5 gate:** report the NULL rate per season and per cell-week (after the per-cell SCL mask),
+  with counts by `status`, and show it to the user **before** changing the minimum-observations rule.
 
 ### 3.8 Schemas
 
@@ -431,7 +446,7 @@ pytest -q
 | D-006 | 2026-11-10 | Only used libraries are declared per phase | No scope creep |
 | D-007 | 2026-11-10 | **Earth Search is the primary imagery source**, CDSE is the fallback | Only Earth Search supports windowed COG reads without auth; CDSE JP2 means ~1 GB/date |
 | D-008 | 2026-11-10 | Baseline seasons 2019–2023, same May–Sep window | 2019–2023 availability verified; 5 seasons give a usable anomaly baseline |
-| D-009 | 2026-11-10 | Reflectance = `DN × 0.0001`; ignore Earth Search `raster:bands.offset` | Real pixels show data already harmonized; advertised −0.1 produces negative reflectance and NDVI > 1 (issue #71) |
+| D-009 | 2026-11-10 | Reflectance = `DN × 0.0001`; ignore Earth Search `raster:bands.offset` | Real pixels show data already harmonized; advertised −0.1 produces negative reflectance and NDVI > 1. Defect: <https://github.com/Element84/earth-search/issues/71> (verified 2026-11-10) |
 | D-010 | 2026-11-10 | 100 m grid in EPSG:32636 | Balances field size against 5-year row counts |
 | D-011 | 2026-11-10 | Weather in its own Silver table, joined in Gold | Avoids repeating 5 weather values in ~70 M NDVI rows |
 | D-012 | 2026-11-10 | Cropland flag from ESA WorldCover 10 m 2021 (CC BY 4.0) | Free, 10 m, covers AOI; removes urban/canal pixels from averages |

@@ -39,8 +39,19 @@ Notes:
 - [x] Weekly minimum-observation rule and null semantics.
 - [x] Leakage rule for Phase 7 added to risks.
 - [x] `config/aoi.yaml` and `tests/test_config.py` updated for seasons, grid and thresholds.
-- [ ] User review of `PROJECT.md` architecture (Phase 1 gate).
+- [x] User review of `PROJECT.md` architecture (accepted 2026-11-10).
+- [x] Review follow-ups: 238k cell-count rationale, cross-era water sanity check, issue link + date,
+      Phase 5 NULL-rate gate, Phase 9 WorldCover attribution.
 
 Notes:
 - Architecture is documentation only; no pipeline code written.
 - Open data points deferred: heat-wave definition (Phase 5), stress threshold (Phase 7).
+
+## Upcoming phase requirements (agreed during Phase 1 review)
+
+- **Phase 3 (blocking):** reflectometry tests must include the per-era real-scene check **and** the
+  cross-era water sanity check (fixed 1 km water box, 1–7 July 2019 vs 2023; |Δ red reflectance| ≤ 0.02,
+  |Δ NDVI| ≤ 0.05, ≥ 1 000 valid water pixels per year).
+- **Phase 5 (gate):** report the weekly NULL rate per season and per cell-week by `status` **before**
+  proposing any relaxation of the ≥ 2-observations rule.
+- **Phase 9:** README must include ESA WorldCover 10 m 2021 v200 attribution (CC BY 4.0).
