@@ -1,0 +1,25 @@
+[project]
+name = "delta-crops"
+version = "0.1.0"
+description = "Satellite-based crop monitoring pipeline for the Nile Delta, Egypt"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
