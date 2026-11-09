@@ -1,4 +1,4 @@
-"""Phase 0 checks for the locked scope in config/aoi.yaml."""
+"""Scope and threshold checks for config/aoi.yaml."""
 
 from __future__ import annotations
 
@@ -38,6 +38,15 @@ def bbox_size_km(bbox: dict[str, float]) -> tuple[float, float]:
     return width, height
 
 
+def season_dates(aoi: dict[str, Any], year: int) -> tuple[date, date]:
+    """Expand the MM-DD window for one study year into concrete dates."""
+    window = aoi["seasons"]["window"]
+    return (
+        date.fromisoformat(f"{year}-{window['start']}"),
+        date.fromisoformat(f"{year}-{window['end']}"),
+    )
+
+
 def test_bbox_is_roughly_50_by_50_km(aoi: dict[str, Any]) -> None:
     width, height = bbox_size_km(aoi["bbox"])
     assert 45 <= width <= 55, f"width is {width:.1f} km"
@@ -60,11 +69,33 @@ def test_bbox_contains_tanta_and_mahalla(aoi: dict[str, Any]) -> None:
         assert bbox["west"] < lon < bbox["east"], f"{name} longitude outside AOI"
 
 
-def test_season_is_summer_2023(aoi: dict[str, Any]) -> None:
-    season = aoi["season"]
-    start = date.fromisoformat(season["start"])
-    end = date.fromisoformat(season["end"])
-    assert start < end
-    assert start == date(2023, 5, 1)
-    assert end == date(2023, 9, 30)
-    assert season["label"]
+def test_seasons_cover_2019_to_2023_with_2023_as_focus(aoi: dict[str, Any]) -> None:
+    seasons = aoi["seasons"]
+    years = seasons["years"]
+    assert years == [2019, 2020, 2021, 2022, 2023]
+    assert len(set(years)) == len(years), "baseline years must be unique"
+    assert seasons["focus"] == 2023
+    assert seasons["focus"] in years
+
+
+def test_every_season_is_the_same_may_to_september_window(aoi: dict[str, Any]) -> None:
+    for year in aoi["seasons"]["years"]:
+        start, end = season_dates(aoi, year)
+        assert (start.month, start.day) == (5, 1)
+        assert (end.month, end.day) == (9, 30)
+        assert start.year == end.year == year
+        assert start < end
+
+
+def test_grid_is_100m_in_utm_zone_36n(aoi: dict[str, Any]) -> None:
+    grid = aoi["grid"]
+    assert grid["cell_size_m"] == 100
+    assert grid["crs"] == "EPSG:32636"
+
+
+def test_quality_thresholds_match_the_architecture(aoi: dict[str, Any]) -> None:
+    quality = aoi["quality"]
+    assert quality["max_scene_cloud_pct"] == 40
+    assert quality["min_weekly_observations"] == 2
+    assert 0 < quality["max_weekly_masked_pct"] <= 100
+    assert aoi["sources"]["imagery"] == "earth-search"

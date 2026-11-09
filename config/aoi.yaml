@@ -1,5 +1,5 @@
-#: Area of interest and study period for the Nile Delta crop monitoring pipeline.
-#: Coordinates are WGS84 (EPSG:4326), decimal degrees.
+#: Area of interest, study seasons and analysis grid for the Nile Delta crop
+#: monitoring pipeline. Coordinates are WGS84 (EPSG:4326), decimal degrees.
 
 name: central-delta-tanta
 
@@ -11,7 +11,26 @@ bbox:
 
 crs: EPSG:4326
 
-season:
-  start: "2023-05-01"
-  end: "2023-09-30"
-  label: "Summer 2023 (rice / maize / cotton)"
+#: The same 1 May - 30 Sep window is pulled for every year.
+#: 2023 is analysed as the focus season; 2019-2022 (and 2023 by leave-one-out)
+#: form the historical baseline for anomaly calculations.
+seasons:
+  focus: 2023
+  years: [2019, 2020, 2021, 2022, 2023]
+  window:
+    start: "05-01"
+    end: "09-30"
+  label: "Summer (rice / maize / cotton)"
+
+grid:
+  cell_size_m: 100
+  crs: EPSG:32636
+
+sources:
+  imagery: earth-search
+  imagery_fallback: copernicus-cdse
+
+quality:
+  max_scene_cloud_pct: 40
+  min_weekly_observations: 2
+  max_weekly_masked_pct: 50
