@@ -1,5 +1,15 @@
 # Progress
 
+## Status
+
+- **Phase:** 2 — Ingestion (planning)
+- **Current step:** Phase 2 plan sent, pending approval
+- **Done:** Phases 0–1 accepted and committed; architecture, schemas and risks are in `PROJECT.md`
+- **Half-done:** none
+- **Tests:** 8 passing (last run 2026-11-10, before any Phase 2 code)
+- **Next:** add ingestion dependencies and implement Earth Search
+  windowed ingestion + Open-Meteo fetch into Bronze, with metadata log and idempotent re-runs.
+
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
 | Phase | Title | Status | Notes |
