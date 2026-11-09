@@ -24,6 +24,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 - [x] `pytest` runs with tests covering config validity and bbox size.
 
 Notes:
+- Committed on `main` as `c2c3ea8`; no remote configured and nothing pushed.
 - Bbox measures ~47.7 km × ~49.8 km (~2 375 km²), inside the 50×50 km target.
 - Only `pyyaml` and `pytest` are installed; phase-specific libraries are added when used.
 - Deferred to later phases: 3–5 years of history for anomaly baselines (Phase 5).
