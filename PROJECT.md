@@ -146,7 +146,8 @@ data/bronze/
   sentinel2/tile=36RUV/year=2019/date=2019-05-04/B08.tif
   sentinel2/tile=36RUV/year=2019/date=2019-05-04/SCL.tif
   weather/year=2019/open_meteo_daily.json
-  _logs/ingestion_log.parquet
+  _logs/ingestion_log.jsonl        # append-only, one record per completed asset
+  _logs/ingestion_log.parquet      # compacted view (rebuildable from the JSONL)
 data/silver/
   cells.parquet
   ndvi/year=2023/month=07/*.parquet
@@ -157,7 +158,11 @@ data/gold/
   weekly_weather/year=2023/weekly_weather.parquet
 ```
 
-- Bronze is raw and append-only; a re-run skips assets whose `asset_key` + checksum already exist.
+- Bronze is raw and append-only. The log is a **JSONL file with one fsynced record per completed
+  `(item, band)`**, written *after* the COG is atomically renamed into place; a crash can therefore lose
+  at most the asset being written, never the log. `ingestion_log.parquet` is produced by a separate
+  `compact` step, so a torn line or an interrupted run can never corrupt it. A re-run reads the JSONL
+  (last record per `asset_key` wins), verifies size + SHA-256, and skips complete assets.
 - Silver/Gold are **overwritten** per `(year, month)` / `(year)` for idempotency — rerunning a date
   replaces its rows instead of appending duplicates.
 - Silver partitions follow the requirement (year/month). Gold is year-partitioned; weekly tables are
@@ -182,19 +187,36 @@ data/gold/
 - **Cost accepted:** a 100 m cell (~1 ha) still mixes several small fields. We report a neighbourhood
   health signal, not field-level diagnosis; this is stated again in the dashboard and README.
 
-Row estimates (≈293 acquisition dates across 5 seasons at the 40 % cloud filter):
+Row estimates (≈293 acquisition dates across 5 seasons at the 40 % cloud filter, each date normally
+covering both tiles):
 
 | Layer | Rows | Est. size |
 | --- | --- | --- |
-| Bronze | ~586 tile-dates × 3 bands | **~14 GB** (12–16 GB) |
+| Bronze | ~586 tile-dates × 3 bands | **~36 GB** (measured 124 MB per acquisition date) |
 | Silver `ndvi` | 238 k × 293 ≈ **70 M** | ~2–3 GB Parquet |
 | Silver `cells` | 238 k | < 20 MB |
 | Silver `weather` | 755 days | < 1 MB |
 | Gold weekly (all cells) | 238 k × 110 weeks ≈ **26 M** | ~1–2 GB |
 | Gold weekly (cropland only) | ~193 k × 110 ≈ **21 M** | ~0.8–1.5 GB |
 
-The machine has **443 GB free** (see the Phase 1 report), so disk is not a constraint. Time is: at the
-measured 1.5–2.4 MB/s from this network, the ~14 GB download takes roughly **1.6–2.6 hours**.
+**Measured, not estimated** (real smoke runs on 2026-11-10, window 15–24 June):
+
+| Run | Assets | Downloaded | Wall time | Throughput |
+| --- | --- | --- | --- | --- |
+| 2019 (sequential) | 24 | 495.1 MB | 638 s | 0.78 MB/s, 26.0 s/asset |
+| 2023 (4 workers) | 24 | 490.6 MB | 253 s | 1.94 MB/s, ~10.5 s/asset effective |
+| 2019 re-run (all skipped) | 24 | 0 MB | 3.0 s | size + SHA-256 verification only |
+
+Bronze size is **~2.7× the Phase 1 estimate** (124 MB per date, not 46 MB): the AOI window is
+5 070 × 1 463 px at 10 m per band, so B04 + B08 alone are ~30 MB each even deflated. Consequences:
+
+- **~36 GB** of Bronze for five seasons — still comfortable against 443 GB free.
+- **~5 h** with 4 workers, **~13 h** sequentially, for the full backfill. Run one year per tmux session.
+- Each date is one 6-asset unit; deleting a single `date=` folder keeps the lake consistent.
+
+The machine has **443 GB free** (see the Phase 1 report), so disk is not a constraint; time is the
+thing to plan around. Concurrency is network-bound, so raising `--workers` above 4 gained little in
+back-to-back testing and risks Earth Search throttling.
 
 ### 3.6 Cropland mask
 
@@ -269,6 +291,13 @@ All timestamps are UTC. `date` is the Sentinel-2 acquisition date, not the inges
 | `processing_baseline` | string, null | e.g. `05.09` |
 | `boa_offset_applied` | boolean, null | recorded for audit only — **not used** for conversion |
 | `stac_href` | string, null | source asset URL |
+| `nodata_pct` | float32, null | % of nodata pixels *inside the AOI window* (0 for valid scenes) |
+| `resolution_m` | float32, null | native pixel size of the asset (10 m B04/B08, 20 m SCL) |
+| `duration_s` | float32, null | read + write time for that asset (inflated under concurrency) |
+| `http_requests` | int32, null | filled for Open-Meteo (1); imagery left null and measured separately |
+
+The JSONL record is written after the COG is verified on disk; `compaction` deduplicates by
+`asset_key` (latest record wins) into the Parquet table above.
 
 Raw Bronze files are COGs per `(tile, year, date, band)`; no Parquet.
 
@@ -380,7 +409,7 @@ longer than 10 days are **flagged, never filled**. Each run writes a JSON + Mark
 | Duplicate / overlapping acquisitions | High | High | Dedupe on `(tile, date)` keeping the highest processing baseline; never append duplicates (idempotent writer) |
 | SCL mask quality (thin cirrus, shadows, 20 m upsampled) | Medium | High | Mask classes 0/1/3/8/9/10/11; track `masked_pct`; fail/flag weeks above 50 %; compare against NDVI outliers |
 | BOA offset metadata is wrong in Earth Search | High (confirmed) | High | Scale-only normalization + Phase 3 tests + checksummed Bronze; CDSE JP2 fallback subtracts the offset |
-| Data volume / runtime | Low | Medium | ~14 GB Bronze, 443 GB free; windowed reads cut bytes ~50×; download ~2 h |
+| Data volume / runtime | Low | Medium | **~36 GB** Bronze (measured 124 MB/date), 443 GB free; windowed reads cut bytes ~50× vs full scenes; backfill ~5 h with 4 workers |
 | Earth Search has no SLA / rate limits | Medium | High | Retries with exponential backoff, bounded concurrency, ingestion log resume, CDSE fallback |
 | 100 m cells mix fields | High | Medium | Documented as neighbourhood signal; `cropland_pct` exposed for filtering; 20 m mode is future work |
 | WorldCover 2021 is static | Medium | Medium | Keep class + percentage so thresholds can change; note in dashboard legend |
@@ -395,6 +424,34 @@ to other years?"). It is **not** valid as a feature for the Phase 7 model: using
 baseline leaks the future. For modelling, every baseline/anomaly feature is recomputed per split using
 only the training years before that split (expanding window, always time-ordered). This rule is a
 release blocker for Phase 7 and is repeated in the model card.
+
+---
+
+### 3.13 Remote reads: GDAL /vsicurl settings and measurements
+
+Every remote read runs inside one `rasterio.Env` block defined once in
+`src/delta_crops/ingestion/raster.py` (`GDAL_ENV`):
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `GDAL_DISABLE_READDIR_ON_OPEN` | `EMPTY_DIR` | Never list a directory over HTTP; the COG URL is one object |
+| `CPL_VSIL_CURL_ALLOWED_EXTENSIONS` | `.tif` | Stops GDAL probing for `.aux.xml`/`.ovr` sidecars (extra HEADs) |
+| `GDAL_HTTP_MAX_RETRY` / `GDAL_HTTP_RETRY_DELAY` | `3` / `1` | Absorb transient 429/5xx and connection resets |
+| `GDAL_HTTP_TIMEOUT` / `GDAL_HTTP_CONNECTTIMEOUT` | `60` / `10` s | Fail a dead socket instead of hanging the backfill |
+| `GDAL_HTTP_MULTIRANGE` | `YES` | Coalesce adjacent block reads into one multipart request |
+| `VSI_CACHE` / `VSI_CACHE_SIZE` | `TRUE` / 50 MB | Reuse blocks across repeated reads of the same file |
+| `GDAL_HTTP_HEADERS` | `Accept-Encoding: identity` | Avoid double compression; GDAL inflates deflate itself |
+
+Measured with `CPL_CURL_VERBOSE=YES` on 2026-11-10 (2023 scenes):
+
+| Asset | Window | COG size | HTTP calls | Bytes transferred |
+| --- | --- | --- | --- | --- |
+| `S2A_36RTV…B04` | 5 070 × 1 463 px | 14.8 MB | 14 (1 HEAD + 13 ranged GETs) | 18.3 MB |
+| `S2B_36RUV…B08` + `…SCL` | 5 070 × 4 375 px / 2 535 × 2 187 px | 51.5 MB + 1.1 MB | 36 (2 HEAD + 34 ranged GETs) | 63.5 MB |
+
+So one acquisition date (two tiles × B04 + B08 + SCL) costs roughly **80–100 HTTP range requests and
+~250 MB transferred**, producing ~124 MB of Bronze COGs. A `--workers 4` run stayed well under any
+plausible per-IP rate limit (≈1 request/s sustained) and never needed a retry.
 
 ---
 
@@ -454,6 +511,9 @@ pytest -q
 | D-014 | 2026-11-10 | Weekly value requires ≥ 2 valid observations; otherwise NULL + status | Honest gaps beat interpolated fake signal |
 | D-015 | 2026-11-10 | Leave-one-year-out baseline is exploratory only; model features use training years only | Prevents temporal leakage in Phase 7 |
 | D-016 | 2026-11-10 | Prefect 3 for orchestration | Lighter than Airflow locally; same retry/backoff semantics |
+| D-017 | 2026-11-10 | Open-Meteo free API, CC BY 4.0, attribution "Weather data by Open-Meteo.com" | Terms verified on the official site 2026-11-10: free tier is **non-commercial only**, < 10 000 calls/day, 5 000/hour, 600/minute; the data is CC BY 4.0. Our usage is 1 call/year of a season. Attribution is on the Phase 9 checklist next to WorldCover |
+| D-018 | 2026-11-10 | Bronze log is append-only JSONL, compacted to Parquet separately | One fsynced record per completed asset survives any crash; rewriting a Parquet file per asset would leave a corrupt log after Ctrl-C |
+| D-019 | 2026-11-10 | 4 concurrent asset downloads (`--workers 4`) | Measured 2.5× wall-clock speedup (638 s → 253 s per 24 assets); network-bound, so more workers add little and risk throttling |
 
 ## 7. Open questions for later phases
 
