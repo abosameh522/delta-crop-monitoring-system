@@ -146,10 +146,12 @@ percentile rounded to a round number, chosen because 35 °C is normal summer wea
 with a 3-day run still covers 29 % of days. Per season the rule yields 3 / 5 / 18 / 3 / 18
 heatwave days (2019–2023); 2023 has four episodes: **14–18 Jul, 22–28 Jul, 5–7 Aug, 6–8 Sep**.
 
-**26 versus 18:** 2023 has 26 days with Tmax ≥ 40 °C, but only 18 of them sit inside runs of at
-least 3 consecutive days; the other 8 are isolated hot days or 1–2 day blips and are correctly
-**not** counted. Gold's `weekly_weather` sums to 18 heatwave days for 2023 because of that rule,
-not because a day was lost.
+**Weekly split at ISO boundaries:** `heatwave_days` is counted per ISO week, so a run that crosses
+a week boundary is split by day, not restarted. The 5–7 Aug run puts 2 days in the week of
+2023-07-31 and 1 day in the week of 2023-08-07; the 6–8 Sep run puts 3 days in the week of
+2023-09-04. The weekly values for 2023 are therefore 3 (Jul 10), 4 (Jul 17), 5 (Jul 24), 2 (Jul 31),
+1 (Aug 07), 3 (Sep 04) — summing to 18. The single-day value in the week of 2023-08-07 is **not**
+a separate episode; it is the tail of the Aug 5–7 run. Do not describe it as one.
 
 **Weather provenance and interpretation limits:** one Open-Meteo grid point at the AOI centre
 (~30.97 °N, 31.14 °E after model snapping), not an AOI average. ISO week 19 starts between 4 and
@@ -196,15 +198,32 @@ Anomaly ranges: `baseline_mean` within [−0.969, 0.978] and `anomaly` within
 [−2, 2]. No `ok` anomaly row has a NULL anomaly/zscore. `no_baseline` counts:
 650,569 / 345,038 / 705,241 / 169,067 / 355,995 (2019–2023).
 
+**zscore percentiles (pooled across years, `anomaly IS NOT NULL`):**  
+p1=-8.2, p10=-1.8, p25=-0.90, p50=-0.02, p75=0.88, p90=1.8, p99=7.5
+
+**zscore is indicative only.** The heavy tails (p1 = −8.2, p99 = +7.5) come from `baseline_std`
+being computed from only 3–4 yearly values per cell/week. The **anomaly (raw difference) is the
+primary Gold signal**; `zscore` must not be presented as stress detection or used as a formal
+test statistic. It is a rough guide for investigation, nothing more.
+
 Timings on this machine (4 DuckDB threads): gate **9.5 s**, weather **0.4 s**, weekly
 **29.5 s** (5.5–6.1 s per year), anomaly **10.0 s**, full `build --force` **50.3 s**. A second
 `build` skips every existing output; `--force` reproduces identical files in the tests.
 
 Sample query (`gold/queries.py`) returns **20 rows in 0.34 s**; 2023 cropland mean NDVI peaks at
-0.72–0.73 in weeks 24–31 and falls to 0.47 by 18 September, with the two July heatwave episodes
-visible in `heatwave_days` (3, 4, 5, 2) alongside the weekly mean `tmax`. Coverage is printed
-next to every NDVI value (100 %, 93.4 %, 17.2 %, 0 % in the affected weeks) so a mean is never
-read without the share of cropland cells behind it.
+0.72–0.73 in weeks 24–31 and falls to 0.47 by 18 September, with the four heatwave episodes
+visible in `heatwave_days` (3, 4, 5, 2, 1, 3 across weeks 28–36) alongside the weekly mean `tmax`.
+Coverage is printed next to every NDVI value (100 %, 93.4 %, 17.2 %, 0 % in the affected weeks)
+so a mean is never read without the share of cropland cells behind it.
+
+**What the 2023 data show (descriptive only):** NDVI and anomaly rise through July and stay positive
+during the four heatwave episodes (weeks 28–36). There is **no visible NDVI drop or anomaly
+reversal** during or after the heatwaves. This is a descriptive comparison over five seasons;
+it **cannot prove absence of an effect** — the signal may be confounded with seasonality (NDVI
+peaks in July–August), the orbit mix (84–95 % mixed in `ok` weeks), and the small baseline sample
+(3–4 years). **Weeks with low coverage (e.g., 2023-07-03 at 17.2 %) must not be compared with
+neighbouring weeks without the coverage column**; the mean is based on a small and potentially
+biased cell subset.
 
 Tests: **7 new Gold tests**, full suite **65 passed in 2.04 s**:
 
