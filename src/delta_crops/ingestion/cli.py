@@ -22,6 +22,7 @@ def _years_between(start: date, end: date) -> list[int]:
 
 
 def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
+    """Download imagery for a window, then ensure weather for every year it spans."""
     if args.year:
         start, end = config.seasons.bounds(args.year)
     elif args.start and args.end:
@@ -60,6 +61,22 @@ def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
     )
     print(f"Log: {bronze.log_path(root)}")
     return 0 if stats["failed"] == 0 else 1
+
+
+def cmd_weather(args: argparse.Namespace, config: Config) -> int:
+    """Fetch Open-Meteo daily data for one year or for every configured season year."""
+    root = Path(args.data_dir) if args.data_dir else data_dir()
+    years = [args.year] if args.year else list(config.seasons.years)
+    failed = 0
+    for year in years:
+        try:
+            result = bronze.ingest_weather(config, year, root)
+        except Exception as exc:  # noqa: BLE001 - report every year, then fail
+            failed += 1
+            print(f"Weather {year}: FAILED {type(exc).__name__}: {exc}")
+            continue
+        print(f"Weather {year}: {result}")
+    return 0 if failed == 0 else 1
 
 
 def cmd_compact(args: argparse.Namespace, _: Config) -> int:
@@ -131,6 +148,10 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--no-checksum", action="store_true", help="skip SHA-256 on existing files")
     ingest.add_argument("--workers", type=int, default=4, help="parallel asset downloads")
     ingest.set_defaults(func=cmd_ingest)
+
+    weather_cmd = sub.add_parser("weather", help="fetch Open-Meteo daily data (no imagery)")
+    weather_cmd.add_argument("--year", type=int, default=None)
+    weather_cmd.set_defaults(func=cmd_weather)
 
     compact = sub.add_parser("compact", help="rewrite JSONL log as deduplicated Parquet")
     compact.set_defaults(func=cmd_compact)

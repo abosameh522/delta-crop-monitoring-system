@@ -71,8 +71,8 @@ def scene_from_item(item: Item) -> Scene | None:
 def select_best(scenes: Iterable[Scene]) -> list[Scene]:
     """Keep one scene per (tile, acquisition date): the highest processing baseline.
 
-    Baseline 04.00+ is 10 m and harmonized; older baselines are often 20 m and not
-    harmonized, so the newer version must win when both exist.
+    Measured: baseline 02.12 scenes are 20 m and not harmonized, while 05.00 (2019)
+    and 05.09 (2023) are 10 m and harmonized. The rule is "newest baseline wins".
     """
     best: dict[tuple[str, date], Scene] = {}
     for scene in scenes:
@@ -81,6 +81,34 @@ def select_best(scenes: Iterable[Scene]) -> list[Scene]:
         if current is None or (scene.baseline, scene.item_id) > (current.baseline, current.item_id):
             best[key] = scene
     return sorted(best.values(), key=lambda scene: (scene.day, scene.tile))
+
+
+def build_search_params(
+    bbox: list[float],
+    start: date,
+    end: date,
+    max_cloud_pct: float,
+    collection: str = COLLECTION,
+) -> dict[str, object]:
+    """Build the STAC search request body (pure function, no network).
+
+    Raises ValueError for an inverted date range or a malformed bbox so a bad CLI
+    call fails before it reaches the API.
+    """
+    if len(bbox) != 4:
+        raise ValueError(f"bbox must have 4 values, got {len(bbox)}")
+    west, south, east, north = bbox
+    if west >= east or south >= north:
+        raise ValueError(f"bbox is degenerate: {bbox}")
+    if end < start:
+        raise ValueError(f"date range is inverted: {start} > {end}")
+    return {
+        "bbox": [west, south, east, north],
+        "datetime": f"{start.isoformat()}/{end.isoformat()}",
+        "collections": [collection],
+        "query": {"eo:cloud_cover": {"lt": max_cloud_pct}},
+        "max_items": None,
+    }
 
 
 def search_scenes(
@@ -92,13 +120,7 @@ def search_scenes(
 ) -> list[Scene]:
     """Query Earth Search for L2A scenes overlapping the bbox, deduplicated."""
     client = Client.open(url)
-    search = client.search(
-        bbox=bbox,
-        **{"datetime": f"{start.isoformat()}/{end.isoformat()}"},
-        collections=[COLLECTION],
-        query={"eo:cloud_cover": {"lt": max_cloud_pct}},
-        max_items=None,
-    )
+    search = client.search(**build_search_params(bbox, start, end, max_cloud_pct))
     scenes = [scene for item in search.items() if (scene := scene_from_item(item)) is not None]
     return select_best(scenes)
 
