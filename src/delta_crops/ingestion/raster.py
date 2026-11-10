@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
-from rasterio.enums import Resampling
 from rasterio.warp import transform_bounds
 from rasterio.windows import Window, from_bounds
 
@@ -64,7 +63,11 @@ def nodata_pct(array: np.ndarray, nodata: float | None) -> float:
 
 
 def write_cog(path: Path, array: np.ndarray, transform: rasterio.Affine, crs: object, nodata: float | None) -> None:
-    """Write a deflate-compressed COG atomically."""
+    """Write a deflate-compressed COG atomically.
+
+    No overviews: Silver reads 10 m windows at native resolution, so pyramids only
+    cost space (measured: 3.9 MB of overviews on a 10.9 MB band).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     profile = {
@@ -77,8 +80,10 @@ def write_cog(path: Path, array: np.ndarray, transform: rasterio.Affine, crs: ob
         "transform": transform,
         "compress": "DEFLATE",
         "predictor": 2 if array.dtype.kind == "u" else 1,
+        "zlevel": 6,
+        "blocksize": 512,
+        "overviews": "NONE",
         "nodata": nodata,
-        "overview_resampling": Resampling.average.name,
     }
     try:
         with rasterio.open(tmp_path, "w", **profile) as dst:
