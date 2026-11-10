@@ -51,7 +51,7 @@ silver:
   #: stop and review the mask (flooded rice can be labelled water or dark area).
   max_scl_dark_pct: 5.0
   max_scl_unclassified_pct: 5.0
-  #: Cross-era stable-target check. Frozen before any 2019-vs-2023 comparison.
+  #: Post-hoc within-orbit rule, frozen before its first cross-era comparison.
   #: Option B (water, class 80) was dropped: B08 DN floor on dark targets and
   #: temporal instability of WorldCover water made it unreliable.
   #: Option C (built-up, class 50) is used instead.
@@ -63,7 +63,18 @@ silver:
     #: Minimum connected-component size in pixels (1 km2 = 10,000 px at 10 m).
     min_component_px: 10000
     #: Window for qualifying dates (both eras).
-    window: ["07-01", "07-14"]
+    window: ["06-01", "08-31"]
+    years: [2019, 2023]
+    grouping: "relative_orbit"
+    orbit_source: "s2:product_uri"
+    groups:
+      R021: {sensing_time_utc_minute: "08:41"}
+      R064: {sensing_time_utc_minute: "08:51"}
+    allowed_tile_mixes: [["36RTV", "36RUV"], ["36RUV"]]
+    eligibility: "min_qualifying_dates_in_each_year"
+    verdict: "all_eligible_groups_pass_both_tolerances"
+    #: Evaluate every eligible group; never drop one after seeing its results.
+    report_path: "silver/_reports/stable_target_dates.parquet"
     #: Qualifying-date rule: a date qualifies if valid pixels >= this fraction of the set.
     min_valid_fraction: 0.5
     #: Tile preference for single-tile dates (36RUV preferred as single source).
@@ -78,3 +89,17 @@ silver:
     #: Tolerances for the 2019-vs-2023 comparison (not to be changed without sign-off).
     max_delta_median_red: 0.02
     max_delta_median_ndvi: 0.05
+    #: Previous Option C rule retained verbatim below; superseded post-hoc.
+    superseded:
+      class: 50
+      erosion_px: 3
+      min_component_px: 10000
+      window: ["07-01", "07-14"]
+      min_valid_fraction: 0.5
+      tile_priority: ["36RTV", "36RUV"]
+      require_dn_gt_one: true
+      min_qualifying_dates: 2
+      pooling: "median_of_date_medians"
+      max_delta_median_red: 0.02
+      max_delta_median_ndvi: 0.05
+      grouping: "none"
