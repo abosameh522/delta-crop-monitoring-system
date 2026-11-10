@@ -12,6 +12,7 @@ dependencies = [
     "pyarrow>=17",
     "duckdb>=1.1",
     "pandera[pandas]>=0.24,<0.30",
+    "prefect>=3,<4",
 ]
 
 [project.optional-dependencies]
