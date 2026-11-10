@@ -2,14 +2,14 @@
 
 ## Status
 
-- **Phase:** 4 — Data quality **IN PROGRESS**; Phase 3 accepted DONE.
-- **Current step:** quality checks, CLI, 14-date DN-floor audit and verification complete; writing final Phase 4 documentation.
+- **Phase:** 4 — Data quality **DONE**; Phase 3 accepted DONE.
+- **Current step:** Phase 4 accepted-plan work complete; final report and runbook saved in docs/phase4-quality.md.
 - **Done:** diagnosis found no Silver count inconsistency. May 7–17 cohort spans both tiles; long tails are non-cropland SCL-masked cells, not persistent swath DN=0. Approved defaults are in config. Real quality run: 293 ledger dates, 70,116,072 rows, all critical checks passed in 18.76 s. 15 dual-tile NULL alerts retained; 12 single-tile dates reported separately; no season exceeds 10% prevalence of >=13-day gaps. DN-floor audit measured 14 fixed dates, 20.16 s, no rebuild.
-- **Half-done:** final phase report/runbook and completion commit.
+- **Half-done:** nothing; no failing tests or unfinished Phase 4 steps.
 - **Gap decision:** D-036 adopts >10 days info, >=13 alert, >10% seasonal alert; original ~20% review gate resolved. Never fill gaps.
 - **Silver DN rule:** keep DN>0; no rebuild. Audit: max NULL-share increase under DN>1 is 0.1914 pp all cells / 0.0303 pp cropland; up to 965 cropland cells/date change by >0.01.
 - **Tests:** 58 passed in 1.87s; 19 new quality tests. NaN-corruption initially exposed JSON serialization failure; fixed and tests pass. Full disposable-copy corruption acceptance: critical ndvi_range detected, CLI exit 1, original SHA-256 unchanged.
-- **Next:** finish documentation and commit the final verified Phase 4 result.
+- **Next:** Phase 5 plan pending approval.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -19,7 +19,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
-| 4 | Data quality | IN PROGRESS | Checks and measurements verified; final documentation pending. Threshold decision resolved in D-036. |
+| 4 | Data quality | DONE | All 293 ledger dates / 70,116,072 rows passed critical checks; 58 tests pass; corruption CLI exit 1; DN audit and D-036 onward documented. |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
 | 7 | Modeling | TODO | Baseline computed from training years only |
@@ -262,3 +262,38 @@ is not a versioned CLI; the Phase 4 implementation is still pending.
 acquisition days with NULL NDVI. The most common is May 7–17 (11 missing days:
 9 without acquisitions + 2 NULL acquisition dates), affecting 43,642 cells.
 Stopped as required; no gap threshold/config or checks implemented.
+
+## Phase 4 completion — 2026-11-11 (Cairo)
+
+- Built Pandera/DuckDB checks, explicit Arrow schema, season gap attribution,
+  contextual NULL alerts, atomic per-run reports and nonzero critical CLI exits.
+- Diagnosis: May 7–17, 2020 = 11 missing calendar days (9 no acquisition + 2
+  NULL acquisitions on May 8/16). Cohort: 43,642 cells, 35,573 cropland; geometric
+  split 15,272 RTV-only / 15,073 overlap / 13,297 RUV-only. It is not an RTV-only
+  footprint. Reconstructed valid counts match Silver. Long tails >30 days:
+  16/19/24/0/0 cells across 2019–2023, all non-cropland RUV-only; SCL masking,
+  mostly class 2, explains chosen longest episodes, not persistent DN=0.
+- User-approved post-measurement gap decision logged as D-036; prior placeholder
+  decision IDs moved to D-037/D-038 so the requested D-036 records the gap rule.
+  The ~20% threshold-review stop gate is explicitly resolved.
+- New quality tests: 19. Final full suite: `.venv/bin/python -m pytest -q` →
+  **58 passed in 1.87s**.
+- `.venv/bin/python -m delta_crops.quality.corruption_demo` → disposable full
+  copy, NDVI 1.25 detected, **CLI exit 1**, source SHA-256 unchanged. Acceptance
+  JSON retained under `data/silver/_reports/quality/`.
+- `.venv/bin/python -m delta_crops.quality.cli` → **PASSED: 293 ledger dates,
+  70,116,072 rows; 4 alert checks; 18.757 s** (scan 12.847 s, gaps 5.811 s).
+  15 dual-tile NULL alerts; 12 single-tile dates context only; total NULL 13.0100%.
+  Gap violations >=13 days: all cells 1.05/4.06/1.69/1.91/4.74%; cropland
+  1.01/4.09/1.74/1.98/4.84%. No seasonal prevalence alert (>10%).
+- `.venv/bin/python -m delta_crops.quality.dn_floor` → 14 fixed dates, **20.16 s**,
+  replay matches Silver, no rebuild. Report retains both rules' NULL/valid counts,
+  excluded pixels and NDVI changes. Recommendation: keep DN>0; local effects remain.
+- Documentation: `docs/phase4-quality.md` includes the interview explanation;
+  `docs/phase4-long-tail-cells.csv` lists all 60 >30-day episodes (59 cell-seasons).
+- Feature commit: e004f3b. Suggested completion commit message:
+  `docs: complete Phase 4 diagnosis, audit evidence and runbook`.
+- Limitations: alert thresholds revised post-measurement; DN audit is sampled;
+  SCL cause classification is observational; reports/raw data are local and
+  gitignored; Phase 3 test 7 still needs its persisted real-data artifact.
+- No Gold tables, orchestration, modeling or Silver rebuild. Phase 5 not started.

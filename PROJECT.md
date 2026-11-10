@@ -682,11 +682,10 @@ pytest -q
 | D-032 | 2026-11-10 | Cross-era stable-target test **blocked**, not loosened | Measured: best 1 km box is 27.1 % water / 15.1 % desert, far from the required 90 %. Tolerances and the 1 km requirement are unchanged; alternatives are put to the user |
 | D-033 | 2026-11-10 | `duckdb>=1.1` added to dependencies | Silver acceptance requires timing a real query on the hive layout; DuckDB is the query engine named in the architecture |
 | D-034 | 2026-11-10 | Stable target switched from Option B (water, class 80) to Option C (built-up, class 50) | Option B failed: B08 DN==1 floor on dark water pixels (clamping at 1 after BOA offset) and temporal instability of WorldCover water (43% look like vegetation on some dates, only 47 persistently water pixels in 2019, 0 in 2023). Option C (built-up, class 50, erosion 3 px, CC >= 1 km2, window 1-14 July, DN>1 required, median-of-date-medians pooling) has 1,057,017 pixels, 6 qualifying dates in 2019 and 4 in 2023, NDVI delta 0.0034 (PASS), red delta 0.0302 (FAIL, tolerance 0.02). Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in repo history. DN-floor limitation (NDVI on dark pixels unreliable) added to known limitations. |
-
+| D-035 | 2026-11-10 | Adopt post-hoc within-orbit stable-target check | Full history, original failures and limitations are retained in the D-035 section below. |
 | D-036 | 2026-11-11 | Revise the original 10-day gap rule AFTER real-data measurement: >10 days information only, >=13 days cell-season alert, >10% seasonal prevalence additional alert; never critical or filled | Measured >10-day shares were 2019 1.20%, 2020 27.18%, 2021 1.70%, 2022 7.64%, 2023 12.69%; AOI-wide gap maxima 4/7/4/4/6 days. Ten days is near the longest-gap median scale (p50=9 in 2020/2023; not literally a median of 10) and would flag common missingness. Thirteen consecutive missing days always contain a complete Monday–Sunday ISO week regardless of start weekday (12 does not); tied to Phase 5 weekly usability, not a fit to the current pass rate. Gap statistics cover all cells and cropland separately. The prior ~20% review gate is resolved. |
 | D-037 | 2026-11-10 | Keep Silver DN>0; no rebuild, per user decision after Phase 3 acceptance | DN=1 floor remains a known limitation; Phase 4 must quantify excluded pixels, valid-count changes, non-NULL → NULL transitions and NULL-share changes under DN>1 without changing Silver. |
 | D-038 | 2026-11-10 | Phase 4 gap usability is NDVI IS NOT NULL; stop for threshold review when >~20% of cells exceed proposed 10 days | Real-data preflight found 27.181% in 2020 (65,045/239,304 cells); initial gate subsequently resolved by the user in D-036. Gaps are data alerts, AOI acquisition absence is information only, and neither is filled. Gap splits count no-ledger days separately from NULL acquisition dates, including season edges. |
-
 | D-039 | 2026-11-11 | Pandera validates compact DuckDB per-file aggregates; Arrow validates explicitly declared physical schema | Laptop scans avoid loading 70M rows into pandas; per-file DISTINCT state is bounded to 239,304 keys. Measured 70,116,072 rows in 18.76 s with 4 threads and 2 GB DuckDB limit. Pandera 0.29.0 tested. |
 | D-040 | 2026-11-11 | Structural/data-integrity failures are critical; missingness is alerts/information; persist JSON before raising | Schema/dtypes, NDVI range, duplicate keys, row count, valid_pixels>total_pixels, required NULLs, foreign cell IDs, wrong date contents and missing ledger-date outputs stop the CLI with nonzero exit. Input list comes from all 293 ledger dates, not file discovery. Schema is six explicit fields; counts uint8, NDVI/masked_pct float32, cell_id int32, physical date date32. |
 | D-041 | 2026-11-11 | Approved alert defaults: masked_pct>50%; dual-tile NULL>50% OR leave-one-out seasonal median+6×raw MAD with >=5 other dates | Single-tile dates get separate context, never a NULL-rate alert for single-tile status. With zero MAD use strictly above peer median; with too few peers use absolute criterion only. All values and severities are in config; actual run retains 15 dual-tile NULL alerts and all 12 single-tile dates as context. |
@@ -755,6 +754,17 @@ Limitations carried forward:
   aggregate change is small, but local effects matter for later cell-level
   stress predictions. The user decides whether to change validity and rebuild;
   neither has been done.
+
+### Phase 4 quality implementation and measured results
+
+See [the Phase 4 report and runbook](docs/phase4-quality.md) for the exact schema,
+config defaults, gap definition, May 2020 geography, per-season threshold shares,
+all long-tail cell IDs/dates, DN-floor measurements and verified command output.
+All 293 ledger dates and 70,116,072 rows passed critical checks in 18.76 seconds;
+58 tests passed. The disposable full-copy corruption test exited 1 on NDVI=1.25
+and verified the original file SHA-256 was unchanged. Alerts remain in reports.
+The 14-date audit supports keeping DN>0/no rebuild for current aggregate work,
+with local DN-floor limitations explicitly retained. Phase 5 has not started.
 
 ## 7. Open questions for later phases
 
