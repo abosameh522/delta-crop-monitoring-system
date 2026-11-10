@@ -87,6 +87,7 @@ class Config:
     sources: Sources
     quality: Quality
     silver: Silver
+    data_quality: dict[str, Any] | None = None
 
 
 def config_path(path: str | Path | None = None) -> Path:
@@ -129,6 +130,7 @@ def load_config(path: str | Path | None = None) -> Config:
             min_weekly_observations=int(raw["quality"]["min_weekly_observations"]),
             max_weekly_masked_pct=float(raw["quality"]["max_weekly_masked_pct"]),
         ),
+        data_quality=raw.get("data_quality"),
         silver=Silver(
             min_valid_fraction=float(raw["silver"]["min_valid_fraction"]),
             masked_scl_classes=tuple(int(c) for c in raw["silver"]["masked_scl_classes"]),

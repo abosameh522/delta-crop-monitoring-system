@@ -103,3 +103,51 @@ silver:
       max_delta_median_red: 0.02
       max_delta_median_ndvi: 0.05
       grouping: "none"
+
+#: Phase 4 quality rules. Missing NDVI is reported, never filled.
+#: Gap thresholds were revised after measuring the real Silver distributions.
+data_quality:
+  ndvi_min: -1.0
+  ndvi_max: 1.0
+  masked_pct_alert_threshold: 50.0
+  dual_tile_null_alert_pct: 50.0
+  null_mad_multiplier: 6.0
+  null_mad_min_other_dates: 5
+  gap_info_days: 10               # share with longest gap >10; never alerts
+  gap_alert_days: 13              # longest gap >=13; includes a full ISO week
+  gap_season_alert_pct: 10.0      # alert when strictly more than 10% violate
+  gap_statistics_days: [10, 13, 21, 30]
+  duckdb_threads: 4
+  duckdb_memory_limit: "2GB"
+  max_failure_examples: 5
+  severity:
+    schema: critical
+    ndvi_range: critical
+    duplicate_keys: critical
+    row_count: critical
+    pixel_counts: critical
+    missing_partition: critical
+    date_partition: critical
+    required_values: critical
+    cell_keys: critical
+    null_rate: alert
+    masked_pct: alert
+    gaps: alert
+    gap_season: alert
+    acquisition_gaps: info
+  #: Retain original six July dates; add May/June/August/September in both eras.
+  dn_floor_audit_dates:
+    - "2019-05-19"
+    - "2019-06-18"
+    - "2019-07-01"
+    - "2019-07-03"
+    - "2019-07-06"
+    - "2019-08-12"
+    - "2019-09-06"
+    - "2023-05-23"
+    - "2023-06-22"
+    - "2023-07-02"
+    - "2023-07-05"
+    - "2023-07-07"
+    - "2023-08-06"
+    - "2023-09-05"

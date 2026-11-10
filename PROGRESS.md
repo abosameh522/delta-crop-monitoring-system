@@ -3,13 +3,13 @@
 ## Status
 
 - **Phase:** 4 — Data quality **IN PROGRESS**; Phase 3 accepted DONE.
-- **Current step:** real-Silver gap measurement complete; stopped at the user-defined >~20% threshold-decision gate.
-- **Done:** all 293 ledger-date files present; measured NDVI usability strictly as `ndvi IS NOT NULL`, May 1–September 30, all 239,304 kept cells per season. Per-cell longest-gap Parquet and JSON summary saved under `data/silver/_reports/quality/`. 2020: 65,045 cells (27.181%) exceed 10 days, triggering the required stop.
-- **Half-done:** Phase 4 checks/report CLI, config thresholds, DN-floor audit, corruption tests and real quality run have NOT started. No dependencies or Silver data changed.
-- **Decision pending:** retain or revise proposed 10-day gap alert after reviewing season statistics. No threshold silently selected. Gaps will remain alerts, never filled.
-- **Silver DN rule:** user decided to keep DN>0, no rebuild. DN>1 effects will be measured in Phase 4 after this gate is resolved.
-- **Tests:** previous Phase 3: 39 passed. No tests run in this measurement-only step; no test failures. Measurement script initially hit an unfinished DuckDB result; draining query results fixed it, and the full measurement completed successfully.
-- **Next:** Phase 4 checks resume once the gap-threshold decision is made: DN-floor audit, tests, real-data validation and completion report.
+- **Current step:** quality checks, CLI, 14-date DN-floor audit and verification complete; writing final Phase 4 documentation.
+- **Done:** diagnosis found no Silver count inconsistency. May 7–17 cohort spans both tiles; long tails are non-cropland SCL-masked cells, not persistent swath DN=0. Approved defaults are in config. Real quality run: 293 ledger dates, 70,116,072 rows, all critical checks passed in 18.76 s. 15 dual-tile NULL alerts retained; 12 single-tile dates reported separately; no season exceeds 10% prevalence of >=13-day gaps. DN-floor audit measured 14 fixed dates, 20.16 s, no rebuild.
+- **Half-done:** final phase report/runbook and completion commit.
+- **Gap decision:** D-036 adopts >10 days info, >=13 alert, >10% seasonal alert; original ~20% review gate resolved. Never fill gaps.
+- **Silver DN rule:** keep DN>0; no rebuild. Audit: max NULL-share increase under DN>1 is 0.1914 pp all cells / 0.0303 pp cropland; up to 965 cropland cells/date change by >0.01.
+- **Tests:** 58 passed in 1.87s; 19 new quality tests. NaN-corruption initially exposed JSON serialization failure; fixed and tests pass. Full disposable-copy corruption acceptance: critical ndvi_range detected, CLI exit 1, original SHA-256 unchanged.
+- **Next:** finish documentation and commit the final verified Phase 4 result.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -19,7 +19,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
-| 4 | Data quality | IN PROGRESS | Gap measurement complete; 2020 exceeds stop gate (27.181% over 10 days); awaiting threshold decision before checks. |
+| 4 | Data quality | IN PROGRESS | Checks and measurements verified; final documentation pending. Threshold decision resolved in D-036. |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
 | 7 | Modeling | TODO | Baseline computed from training years only |
