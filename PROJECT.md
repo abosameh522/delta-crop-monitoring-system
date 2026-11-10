@@ -115,9 +115,11 @@ ndvi        = (nir − red) / (nir + red)   # red, nir already in reflectance
 
 - Do **not** use `raster:bands.offset` or `boa_offset_applied` from this collection.
 - Do **not** clip negatives to 0 before NDVI; use the SCL mask instead.
-- When the same acquisition has several processing baselines, keep the **highest baseline**: older
-  baselines are often 20 m and not harmonized (e.g. `S2A_36RTV_20190507_1_L2A`, baseline 02.12, 5490×5490
-  at 20 m), while baseline 05.00 is 10 m and harmonized.
+- When the same acquisition has several processing baselines, keep the **highest baseline**.
+  Measured: `S2A_36RTV_20190507_1_L2A` (baseline **02.12**) is 5 490 × 5 490 at **20 m**, while
+  baseline **05.00** is 10 m; the 2019 (05.00) and 2023 (05.09) smoke scenes are **both 10 m** in
+  B04/B08. So the rule is "prefer the newest baseline", not "old baselines are 20 m" — only the 02.12
+  scene was observed at 20 m.
 - If we ever switch to CDSE JP2, the opposite applies: baseline ≥ 04.00 there **does** contain the
   +1000 offset, so subtract 1 000 DN.
 
@@ -192,7 +194,7 @@ covering both tiles):
 
 | Layer | Rows | Est. size |
 | --- | --- | --- |
-| Bronze | ~586 tile-dates × 3 bands | **~36 GB** (measured 124 MB per acquisition date) |
+| Bronze | ~574 tile-dates × 3 bands | **~26 GB** (measured 90.8 MB per acquisition date) |
 | Silver `ndvi` | 238 k × 293 ≈ **70 M** | ~2–3 GB Parquet |
 | Silver `cells` | 238 k | < 20 MB |
 | Silver `weather` | 755 days | < 1 MB |
@@ -201,22 +203,23 @@ covering both tiles):
 
 **Measured, not estimated** (real smoke runs on 2026-11-10, window 15–24 June):
 
-| Run | Assets | Downloaded | Wall time | Throughput |
+| Run | Assets | Size | Wall time | Throughput |
 | --- | --- | --- | --- | --- |
-| 2019 (sequential) | 24 | 495.1 MB | 638 s | 0.78 MB/s, 26.0 s/asset |
-| 2023 (4 workers) | 24 | 490.6 MB | 253 s | 1.94 MB/s, ~10.5 s/asset effective |
-| 2019 re-run (all skipped) | 24 | 0 MB | 3.0 s | size + SHA-256 verification only |
+| 2019, 4 workers (final format) | 24 | 365.0 MB | 254 s | 1.4 MB/s |
+| 2023, 4 workers (final format) | 24 | 361.5 MB | 313 s | 1.2 MB/s |
+| 2019, sequential (pre-compression) | 24 | 495.1 MB | 638 s | 0.78 MB/s |
+| 2019 re-run (all skipped) | 24 | 0 MB | 3.0 s | size + SHA-256 only |
 
-Bronze size is **~2.7× the Phase 1 estimate** (124 MB per date, not 46 MB): the AOI window is
-5 070 × 1 463 px at 10 m per band, so B04 + B08 alone are ~30 MB each even deflated. Consequences:
-
-- **~36 GB** of Bronze for five seasons — still comfortable against 443 GB free.
-- **~5 h** with 4 workers, **~13 h** sequentially, for the full backfill. Run one year per tmux session.
-- Each date is one 6-asset unit; deleting a single `date=` folder keeps the lake consistent.
+Per acquisition date (two tiles, B04 + B08 + SCL): **90.8 MB mean** over 8 real dates — 36RTV ≈ 44 MB,
+36RUV ≈ 137 MB, because 36RUV's AOI window is 5 070 × 4 860 px against 5 070 × 1 463 px for 36RTV.
+Per tile-scene: ≈ 45.6 MB. Across 574 tile-scenes: **≈ 26 GB**, i.e. **~5–6 h** at 4 workers
+(~13 h sequential). Phase 1's 46 MB/date estimate was 2× too low; the 36 GB figure from the first
+smoke run was 28 % too high because those COGs still carried overviews. Both corrections are measured.
 
 The machine has **443 GB free** (see the Phase 1 report), so disk is not a constraint; time is the
-thing to plan around. Concurrency is network-bound, so raising `--workers` above 4 gained little in
-back-to-back testing and risks Earth Search throttling.
+thing to plan around. Concurrency is network-bound: `--workers 4` measured 2.5× faster than
+sequential, and back-to-back runs varied 254–313 s for the same 24 assets, so plan with the slower
+figure. Raising `--workers` further gains little and risks Earth Search throttling.
 
 ### 3.6 Cropland mask
 
@@ -409,7 +412,7 @@ longer than 10 days are **flagged, never filled**. Each run writes a JSON + Mark
 | Duplicate / overlapping acquisitions | High | High | Dedupe on `(tile, date)` keeping the highest processing baseline; never append duplicates (idempotent writer) |
 | SCL mask quality (thin cirrus, shadows, 20 m upsampled) | Medium | High | Mask classes 0/1/3/8/9/10/11; track `masked_pct`; fail/flag weeks above 50 %; compare against NDVI outliers |
 | BOA offset metadata is wrong in Earth Search | High (confirmed) | High | Scale-only normalization + Phase 3 tests + checksummed Bronze; CDSE JP2 fallback subtracts the offset |
-| Data volume / runtime | Low | Medium | **~36 GB** Bronze (measured 124 MB/date), 443 GB free; windowed reads cut bytes ~50× vs full scenes; backfill ~5 h with 4 workers |
+| Data volume / runtime | Low | Medium | **~26 GB** Bronze (measured 90.8 MB/date after compression), 443 GB free; windowed reads cut bytes ~50× vs full scenes; backfill ~5–6 h with 4 workers |
 | Earth Search has no SLA / rate limits | Medium | High | Retries with exponential backoff, bounded concurrency, ingestion log resume, CDSE fallback |
 | 100 m cells mix fields | High | Medium | Documented as neighbourhood signal; `cropland_pct` exposed for filtering; 20 m mode is future work |
 | WorldCover 2021 is static | Medium | Medium | Keep class + percentage so thresholds can change; note in dashboard legend |
@@ -450,8 +453,33 @@ Measured with `CPL_CURL_VERBOSE=YES` on 2026-11-10 (2023 scenes):
 | `S2B_36RUV…B08` + `…SCL` | 5 070 × 4 375 px / 2 535 × 2 187 px | 51.5 MB + 1.1 MB | 36 (2 HEAD + 34 ranged GETs) | 63.5 MB |
 
 So one acquisition date (two tiles × B04 + B08 + SCL) costs roughly **80–100 HTTP range requests and
-~250 MB transferred**, producing ~124 MB of Bronze COGs. A `--workers 4` run stayed well under any
+~250 MB transferred**, producing ~91 MB of Bronze COGs. A `--workers 4` run stayed well under any
 plausible per-IP rate limit (≈1 request/s sustained) and never needed a retry.
+
+### 3.14 Bronze COG format (write side)
+
+`write_cog` in `src/delta_crops/ingestion/raster.py` writes: **COG, DEFLATE, `predictor=2`, `zlevel=6`,
+512 × 512 tiles, no overviews**, nodata preserved, and an atomic `os.replace` from a `.tmp` sibling.
+
+Why these settings, measured on the 2019 and 2023 smoke files:
+
+| Variant (36RTV B04, 5 070 × 1 463 px, 14.8 MB of raw DN) | Size |
+| --- | --- |
+| DEFLATE + predictor 2 + overviews (first implementation) | 14.81 MB |
+| DEFLATE + predictor 2, **no overviews** (final) | 10.87 MB |
+| ZSTD level 9 + predictor 2, no overviews (rejected) | 10.33 MB |
+
+- The first implementation *was* compressed — Sentinel DN is noisy 13-bit data, so the band only
+  deflates to ~73 % — but the auto-built overviews added **3.9 MB**, exactly cancelling the gain and
+  making the file look uncompressed. Silver reads native 10 m windows and never uses pyramids, and any
+  later map/dashboard zoom reads Gold tables, so overviews are pure cost here. `overviews="NONE"`.
+- ZSTD is 5 % smaller but needs a GDAL build with libzstd to read; DEFLATE is readable by every GIS
+  tool, which matters for a portfolio repo. 5 % of 26 GB is ~1.3 GB — not worth the compatibility risk.
+- **Losslessness proved, not assumed:** all 48 smoke assets were re-encoded and the SHA-256 of the
+  decoded array compared before/after — 48/48 identical, 985.7 MB → 726.4 MB (**26.3 % smaller**).
+  The same check was repeated after deleting the smoke data and re-downloading it from Earth Search:
+  all 48 decoded arrays still match the pre-change hashes, so the whole download → decode → write path
+  is bit-exact.
 
 ---
 
@@ -466,6 +494,7 @@ plausible per-IP rate limit (≈1 request/s sustained) and never needed a retry.
 ├── data/                # local lake: bronze | silver | gold (gitignored)
 ├── dags/                # orchestration (Phase 6)
 ├── docs/                # reports, model card, screenshots
+├── scripts/backfill.sh  # sequential, logged, resumable Bronze backfill
 ├── src/delta_crops/
 │   ├── ingestion/       # Phase 2: Earth Search + Open-Meteo → Bronze
 │   ├── transform/       # Phase 3: Bronze → Silver, Phase 5: Gold
@@ -513,7 +542,9 @@ pytest -q
 | D-016 | 2026-11-10 | Prefect 3 for orchestration | Lighter than Airflow locally; same retry/backoff semantics |
 | D-017 | 2026-11-10 | Open-Meteo free API, CC BY 4.0, attribution "Weather data by Open-Meteo.com" | Terms verified on the official site 2026-11-10: free tier is **non-commercial only**, < 10 000 calls/day, 5 000/hour, 600/minute; the data is CC BY 4.0. Our usage is 1 call/year of a season. Attribution is on the Phase 9 checklist next to WorldCover |
 | D-018 | 2026-11-10 | Bronze log is append-only JSONL, compacted to Parquet separately | One fsynced record per completed asset survives any crash; rewriting a Parquet file per asset would leave a corrupt log after Ctrl-C |
-| D-019 | 2026-11-10 | 4 concurrent asset downloads (`--workers 4`) | Measured 2.5× wall-clock speedup (638 s → 253 s per 24 assets); network-bound, so more workers add little and risk throttling |
+| D-019 | 2026-11-10 | 4 concurrent asset downloads (`--workers 4`) | Measured 2.5× wall-clock speedup (638 s → 254–313 s per 24 assets); network-bound, so more workers add little and risk throttling |
+| D-020 | 2026-11-10 | Bronze COGs: DEFLATE + `predictor=2` + 512 tiles + **no overviews**; ZSTD rejected | Overviews cost 3.9 MB on a 10.9 MB band and Silver never reads them (26.3 % smaller without). ZSTD is only 5 % smaller but needs libzstd in the reader, so DEFLATE wins on portability |
+| D-021 | 2026-11-10 | Weather is fetched by `ingest` for every year in the window **and** by a standalone `weather` command | Lets the cheap weather half of ingestion run (and be proven) without touching imagery; same ledger, so both are idempotent |
 
 ## 7. Open questions for later phases
 

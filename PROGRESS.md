@@ -2,14 +2,16 @@
 
 ## Status
 
-- **Phase:** 2 — Ingestion (Bronze) — **code complete, awaiting review**
-- **Current step:** Phase report recorded; Phase 3 pending approval
-- **Done:** Phases 0–1 accepted and committed. Phase 2 modules, 17 offline tests, and two real smoke
-  runs (2019 + 2023, 24 assets each) are complete. Idempotent re-runs verified (0 downloads, 24 skips).
-- **Half-done:** full 5-season backfill is **not run** (by design) — commands are in the Phase 2
-  section below for the user to run in tmux.
-- **Tests:** 17 passing (last run 2026-11-10)
-- **Next:** Phase 3 plan (Bronze → Silver) pending approval.
+- **Phase:** 2 — Ingestion (Bronze) — **review fixes applied, awaiting your go-ahead for the backfill**
+- **Current step:** Phase 2 review items 1–5 completed and committed; Phase 3 NOT started
+- **Done:** Phases 0–1 accepted and committed. Phase 2 modules + 23 offline tests. Two-era smoke runs
+  re-done after the COG change (2019 + 2023), both idempotent (0 downloaded / 24 skipped on re-run).
+  Weather present and validated for all five seasons (153 days each). COG compression fixed and
+  proven lossless (48/48 files, 26.3 % smaller).
+- **Half-done:** full 5-season imagery backfill is **not run** (by design). A 5-minute accidental start
+  left 6 extra 2019 dates (28 assets, 336.5 MB) on disk — harmless, they will be skipped on resume.
+- **Tests:** 23 passing (last run 2026-11-10)
+- **Next:** run `scripts/backfill.sh` (commands in the Phase 2 section); the Phase 3 plan follows.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -17,7 +19,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | --- | --- | --- | --- |
 | 0 | Scope and setup | DONE | Committed on `main` (`c2c3ea8`) |
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
-| 2 | Ingestion (Bronze) | DONE | Earth Search + Open-Meteo; JSONL log; measured runs; awaiting review |
+| 2 | Ingestion (Bronze) | DONE | Earth Search + Open-Meteo; JSONL log; compression fix; awaiting backfill |
 | 3 | Bronze → Silver (cleaning) | TODO | Must implement reflectance rule + Phase 3 offset tests |
 | 4 | Data quality | TODO | |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
@@ -69,79 +71,127 @@ Notes:
       completed `(item, band)`, compacted to Parquet as a separate step.
 - [x] Idempotent re-runs: skip when the logged size + SHA-256 match the file on disk.
 - [x] `nodata_pct` per band, `resolution_m`, `duration_s` in the log (no NDVI/masking in this phase).
-- [x] 17 offline tests, including a simulated interruption and a torn-final-line recovery test.
+- [x] 23 offline tests, including a simulated interruption, a torn-final-line recovery test and
+      request-body tests for the STAC query builder.
 - [x] GDAL/vsicurl settings documented in `PROJECT.md` §3.13 with measured request counts.
+- [x] Bronze COGs written DEFLATE + predictor 2 + tiled, **no overviews**; losslessness proved on
+      48/48 files (decoded-array SHA-256 unchanged) and 26.3 % smaller.
 - [x] Open-Meteo terms verified; recorded as D-017 and added to the Phase 9 checklist.
-- [x] Two-era smoke runs (2019 and 2023) with real numbers.
+- [x] Two-era smoke runs (2019 and 2023) with real numbers, re-run after the compression change.
 
-Smoke results (window 15–24 June, cloud < 40 %):
+Smoke results (window 15–24 June, cloud < 40 %, final COG format):
 
 | | 2019 | 2023 |
 | --- | --- | --- |
 | Scenes / dates | 8 / 4 | 8 / 4 |
-| Assets | 24 (495.1 MB) | 24 (490.6 MB) |
+| Assets | 24 (365.0 MB) | 24 (361.5 MB) |
 | Item ids | `…_1_L2A` | `…_0_L2A` |
 | Baseline | 05.00 | 05.09 |
-| BS assets (`red`/`nir`/`scl`) | identical names | identical names |
+| STAC asset names (`red`/`nir`/`scl`) | identical | identical |
 | `raster:bands` scale / offset | 0.0001 / −0.1 | 0.0001 / −0.1 |
 | `boa_offset_applied` | true | true |
 | Resolution | B04/B08 10 m, SCL 20 m | same |
 | nodata | 0 in B04/B08 (mean 3.65 % incl. 13.5–15.7 % on 36RUV dates) | 0 in B04/B08 (mean 4.01 %, up to 16.43 %) |
-| Wall time | 638 s sequential | 253 s with 4 workers |
-| Re-run | 0 downloaded / 24 skipped in 3.0 s | 0 downloaded / 24 skipped in 2.1 s |
+| Wall time (4 workers) | 254 s | 313 s |
+| Re-run | 0 downloaded / 24 skipped in 3.0 s | 0 downloaded / 24 skipped |
 
 **Era differences are naming and baseline only.** Asset names, scale, offset flag, resolutions and
 nodata are identical between 2019 and 2023, which confirms the reflectometry rule (scale only, never
 the advertised −0.1) applies to both eras without a branch. The one real difference is the processing
 baseline (`05.00` → `05.09`), which is exactly why dedupe keeps the highest baseline.
 
+### Weather in Bronze (proven for all five years)
+
+`ingest` fetches weather itself for every year its window touches, and there is also a standalone
+command that fetches weather without any imagery (both idempotent through the same ledger):
+
+```bash
+.venv/bin/python -m delta_crops.ingestion.cli weather            # all configured season years
+.venv/bin/python -m delta_crops.ingestion.cli weather --year 2023
+```
+
+Real state of `data/bronze/weather/year=YYYY/open_meteo_daily.json` (checked 2026-11-10):
+
+| Year | Days | Range | Validation | Nulls |
+| --- | --- | --- | --- | --- |
+| 2019 | 153 | 2019-05-01 .. 2019-09-30 | passed | 0 |
+| 2020 | 153 | 2020-05-01 .. 2020-09-30 | passed | 0 |
+| 2021 | 153 | 2021-05-01 .. 2021-09-30 | passed | 0 |
+| 2022 | 153 | 2022-05-01 .. 2022-09-30 | passed | 0 |
+| 2023 | 153 | 2023-05-01 .. 2023-09-30 | passed | 0 |
+
+Validation is `weather.validate_payload`: it raises unless the daily arrays exist, have exactly
+`(end − start).days + 1` entries, start on 1 May and end on 30 Sep, and contain all five variables.
+Open-Meteo snaps the request to its model grid: the AOI centre (30.975 °N, 31.110 °E) returns
+`30.9666, 31.1374`, ~3 km from the geometric centre — acceptable for a 48 km AOI, noted for the
+weather table's provenance.
+
 ### Full backfill (run manually)
 
-Expected work from STAC (checked 2026-11-10, cloud < 40 %):
+Expected work from STAC (checked 2026-11-10, cloud < 40 %) with measured sizes (45.6 MB/tile-scene):
 
 | Year | Tile-scenes | Assets | Est. Bronze |
 | --- | --- | --- | --- |
-| 2019 | 113 | 339 | ~7.0 GB |
-| 2020 | 116 | 348 | ~7.2 GB |
-| 2021 | 119 | 357 | ~7.4 GB |
-| 2022 | 117 | 351 | ~7.3 GB |
-| 2023 | 109 | 327 | ~6.8 GB |
-| **Total** | **574** | **1 722** | **~36 GB**, ~5 h at 4 workers |
+| 2019 | 113 | 339 | ~5.2 GB |
+| 2020 | 116 | 348 | ~5.3 GB |
+| 2021 | 119 | 357 | ~5.4 GB |
+| 2022 | 117 | 351 | ~5.3 GB |
+| 2023 | 109 | 327 | ~5.0 GB |
+| **Total** | **574** | **1 722** | **~26 GB**, ~5–6 h at 4 workers |
+
+Run the years **sequentially in one window**: the 4-worker cap is per process, and five parallel years
+would open ~20 connections against one shared ledger.
 
 ```bash
-cd ~/delta-crop-monitoring-system && source .venv/bin/activate
+cd ~/delta-crop-monitoring-system
+mkdir -p data/bronze/_logs
 
-# One tmux session, one year per window. Re-run any year safely; it skips completed assets.
-tmux new-session -d -s bronze
+# Sequential years in ONE window, laptop kept awake, per-year log + combined log.
+tmux new-session -d -s bronze -c ~/delta-crop-monitoring-system \
+  'systemd-inhibit --what=sleep:idle --why="Bronze backfill" \
+     bash scripts/backfill.sh 2>&1 | tee data/bronze/_logs/backfill.log'
+
+tmux attach -t bronze     # Ctrl-b d to detach; the run continues
+```
+
+`scripts/backfill.sh` loops `2019 2020 2021 2022 2023` in order, uses `.venv/bin/python` by absolute
+path (no dependence on the tmux environment), logs each year to `data/bronze/_logs/ingest_<year>.log`,
+continues after a failed year, and compacts the ledger at the end. Pass years explicitly to run a
+subset: `bash scripts/backfill.sh 2022 2023`.
+
+Progress check (reads the JSONL only, no network):
+
+```bash
+cd ~/delta-crop-monitoring-system
+.venv/bin/python -m delta_crops.ingestion.cli status          # assets, GB, mean nodata per year
+.venv/bin/python -m delta_crops.ingestion.cli status --year 2023
+du -sh data/bronze/sentinel2
+tail -f data/bronze/_logs/ingest_2023.log
+```
+
+Completeness check (re-queries STAC and compares expected assets with logged + checksummed files;
+exit code 1 if anything is missing). Run per year, or after the whole backfill:
+
+```bash
+cd ~/delta-crop-monitoring-system
 for y in 2019 2020 2021 2022 2023; do
-  tmux new-window -t bronze -n "y$y" \
-    "python -m delta_crops.ingestion.cli ingest --year $y 2>&1 | tee data/bronze/_logs/ingest_$y.log"
+  .venv/bin/python -m delta_crops.ingestion.cli verify --year "$y" || echo "INCOMPLETE: $y"
 done
-tmux attach -t bronze          # Ctrl-b n / p to move between years
 ```
 
-Progress check (reads the JSONL, no network):
-
-```bash
-python -m delta_crops.ingestion.cli status          # per-year asset counts + GB + mean nodata
-du -sh data/bronze/sentinel2                        # bytes actually on disk
-```
-
-Completeness check (re-queries STAC, compares expected vs logged+checksummed files; exit code 1 if
-anything is missing). Run per year after that year's window finishes:
-
-```bash
-for y in 2019 2020 2021 2022 2023; do
-  python -m delta_crops.ingestion.cli verify --year $y || echo "INCOMPLETE: $y"
-done
-python -m delta_crops.ingestion.cli compact         # refresh ingestion_log.parquet
-```
+Resume after any interruption (Ctrl-C, sleep, network drop): just run the same `ingest --year Y`
+again — complete assets are skipped by size + SHA-256, and the JSONL is append-only, so a torn last
+line is discarded on read. Only that one year needs re-running; the ledger is shared, so no other year
+is affected.
 
 Notes:
-- Do not run two windows for the **same year** at once; the JSONL append is safe, but duplicate
-  downloads waste bandwidth. Different years are independent.
-- If a run is interrupted, just re-run it: the log is append-only and complete assets are skipped.
-- Disk: ~36 GB total. Check with `df -h .` before starting 2022/2023.
+- Weather is already in Bronze for all five years; every `ingest --year` re-checks it and skips it.
+- Disk: ~26 GB total. Check with `df -h .` before starting 2022/2023.
+- A full year at 4 workers takes roughly 1–1.2 h (109–119 tile-scenes), so budget a morning.
+- **Honest note:** while checking this script's syntax a real 2019 run was started by mistake and
+  killed after ~5 minutes. It left 6 dates (2019-05-02 … 05-14, 28 assets, 336.5 MB) of
+  legitimate 2019 Bronze on disk. Nothing is corrupt or duplicated, and the run above resumes after
+  them (they will be skipped). No other year was touched.
 
 ## Upcoming phase requirements (agreed during Phase 1 review)
 
