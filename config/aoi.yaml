@@ -34,3 +34,23 @@ quality:
   max_scene_cloud_pct: 40
   min_weekly_observations: 2
   max_weekly_masked_pct: 50
+
+#: Bronze -> Silver rules (Phase 3). Values here are the ones the code reads;
+#: PROJECT.md documents why each was chosen.
+silver:
+  #: A cell keeps a value only if at least this share of its in-AOI 10 m pixels
+  #: has a valid NDVI (unmasked AND non-zero reflectance AND denominator > 0).
+  min_valid_fraction: 0.5
+  #: SCL classes dropped before aggregation: 0 no-data, 1 saturated, 2 dark area,
+  #: 3 cloud shadow, 8 cloud medium, 9 cloud high, 10 thin cirrus, 11 snow/ice.
+  #: Kept: 4 vegetation, 5 bare, 6 water, 7 unclassified.
+  masked_scl_classes: [0, 1, 2, 3, 8, 9, 10, 11]
+  #: Tile preference when both tiles carry a valid pixel for the same ground.
+  tile_priority: ["36RTV", "36RUV"]
+  #: Gate: if class 2 or class 7 exceeds this share of in-AOI pixels in a season,
+  #: stop and review the mask (flooded rice can be labelled water or dark area).
+  max_scl_dark_pct: 5.0
+  max_scl_unclassified_pct: 5.0
+  #: Cross-era stable-target check. Left null until the box is frozen from the
+  #: survey (`silver stable-target --survey`); the test skips while it is null.
+  stable_target: null

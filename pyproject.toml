@@ -10,6 +10,7 @@ dependencies = [
     "rasterio>=1.4",
     "requests>=2.32",
     "pyarrow>=17",
+    "duckdb>=1.1",
 ]
 
 [project.optional-dependencies]

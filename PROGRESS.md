@@ -2,15 +2,19 @@
 
 ## Status
 
-- **Phase:** 2 — Ingestion (Bronze) **COMPLETE and verified**; Phase 3 plan sent, pending approval
-- **Current step:** housekeeping fixes committed; Phase 3 (Bronze → Silver) plan awaiting approval
-- **Done:** Phases 0–1 committed. Phase 2: Earth Search + Open-Meteo ingestion, append-only JSONL
-  ledger, COG compression fixed (overviews removed, lossless proof), 24 tests. **Full backfill complete
-  and user-verified:** 2019–2023, 1 722 assets, 25.81 GB, 293 dates, `verify` clean for every year.
-- **Half-done:** nothing (Phase 3 not started — no Silver code written).
-- **Tests:** 24 passing (last run 2026-11-10)
-- **Next:** implement Phase 3: Bronze → Silver (NDVI + SCL mask + 100 m
-  aggregation + weather), following the plan's decisions.
+- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (full 293-date build running)
+- **Current step:** full Silver build in background; docs updated; acceptance checks pending completion
+- **Done:** Phases 0–2 committed and verified. Phase 3 code: `transform/{grid,reflectance,bronze_reader,silver,cells,weather,stability,cli}.py`,
+  `silver:` config block, 11 new tests (35 total). Grid measured 487 × 508 → 239 304 kept cells,
+  194 778 cropland. Cells and weather tables built. July 2023 (12 dates) built and checked.
+- **Half-done:** full 293-date build running (100/293 at last check); PROJECT.md decisions D-022…D-033
+  added; PROGRESS.md being updated.
+- **Blocked:** cross-era stable-target test (test 7) — no 1 km box with ≥ 90 % water/desert exists in
+  the AOI (best 27.1 % water / 15.1 % desert). Not loosened; alternatives proposed to the user.
+- **Tests:** 35 passing (last run 2026-11-10)
+- **Next:** when the build finishes, run the acceptance checks (rows = 293 × 239 304,
+  duplicate `(cell_id, date)` check, NDVI range, DuckDB timing on the hive layout), update
+  PROGRESS.md/PROJECT.md with the measured numbers, commit, write the Phase 3 report.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -19,7 +23,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 0 | Scope and setup | DONE | Committed on `main` (`c2c3ea8`) |
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
-| 3 | Bronze → Silver (cleaning) | IN PROGRESS | Plan sent; scale-only reflectance, SCL mask, 100 m grid, weather |
+| 3 | Bronze → Silver (cleaning) | IN PROGRESS | 239 304 kept cells; NDVI + SCL mask + weather; full build running |
 | 4 | Data quality | TODO | |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |

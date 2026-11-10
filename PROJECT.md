@@ -175,34 +175,48 @@ data/gold/
 
 ### 3.5 Grid design
 
-- **100 m cells, EPSG:32636**, origin snapped to the AOI's south-west corner in UTM. 478 × 498 ≈
-  **238 000 cells**.
-- **Why 238k and not 250k:** the earlier 500 × 500 = 250 000 figure assumed a full 50.0 × 50.0 km
-  square. The approved AOI is **47.72 km east–west × 49.76 km north–south**, and the grid is clipped
-  to that rectangle after reprojection to UTM 36N: `ceil(47.72 / 0.1) = 478` columns ×
-  `ceil(49.76 / 0.1) = 498` rows = **238 044 cells**. The UTM envelope differs from the WGS84 bbox by
-  under 100 m per edge; the origin is snapped outward and partial edge cells are **retained**, not
-  dropped, so no cropland on the AOI boundary is lost. Every row-count estimate on this page uses
-  238 000 cells, never 250 000.
-- NDVI is computed at native **10 m**, then mean-aggregated to 100 m; the SCL mask (native 20 m) is
-  upsampled to 10 m for masking.
+- **100 m cells, EPSG:32636**, origin snapped outward to the AOI envelope's south-west corner in UTM,
+  then **clipped to the AOI polygon**: 487 × 508 = 247 396 envelope cells, of which **239 304
+  intersect the AOI** and are kept (8 092 corner cells are outside the rotated rectangle).
+- **Measured 2026-11-10** with `python -m delta_crops.transform.cli grid`:
+
+  | Quantity | Value |
+  | --- | --- |
+  | UTM bounds (west, south, east, north) | 295 148.7, 3 403 045.1, 343 753.4, 3 453 740.4 |
+  | UTM extent | 48.6 × 50.7 km |
+  | Grid origin (`x0`, `y0`) | 295 100, 3 403 000 |
+  | Envelope | 487 × 508 = **247 396** cells |
+  | Kept (intersect AOI, `all_touched`) | **239 304** |
+  | AOI 10 m pixels inside polygon | **23 840 326** = 2 384.0 km² |
+  | Mean in-AOI pixels per kept cell | 99.62 (max 100) |
+
+  **Correction (measured, supersedes earlier drafts):** an earlier draft said 478 × 498 ≈ 238 044
+  cells and "~2.3 km uncovered". The real numbers are 487 × 508, and the old grid left roughly
+  **0.85 km east + 0.94 km north** outside the grid (9 columns × 0.1 km, 10 rows × 0.1 km), not 2.3 km.
+  The kept-cell count (239 304) sits inside the expected 236 000–242 000 band, so no stop was needed.
+  The earlier "~245 000 / ~200 000 cropland / ~72 M rows" estimate was wrong on all three counts.
+- NDVI is computed at native **10 m**, then mean-aggregated to 100 m. The SCL mask (native 20 m) is
+  **resampled to the 10 m B04 grid with nearest neighbour** rather than block-replicated: in this
+  collection the 20 m SCL origin sits half a 10 m pixel (10 m) away from the B04 origin, so block
+  replication would shift every class by one pixel and silently bias the mask.
 - Why not 10 m/20 m: 20 m → 6.25 M cells per date, ~1.5 B rows over 5 years — too heavy for a laptop.
   Why not 250 m/1 km: a 250 m cell is 6.25 ha and a 1 km cell 100 ha, while typical Delta holdings are
   0.1–1 ha; both smear field-scale stress into noise.
 - **Cost accepted:** a 100 m cell (~1 ha) still mixes several small fields. We report a neighbourhood
   health signal, not field-level diagnosis; this is stated again in the dashboard and README.
 
-Row estimates (≈293 acquisition dates across 5 seasons at the 40 % cloud filter, each date normally
+Row estimates (293 acquisition dates across 5 seasons at the 40 % cloud filter, each date normally
 covering both tiles):
 
 | Layer | Rows | Est. size |
 | --- | --- | --- |
 | Bronze | 574 tile-scenes = 1 722 assets | **25.8 GB** (measured on the full backfill) |
-| Silver `ndvi` | 238 k × 293 ≈ **70 M** | ~2–3 GB Parquet |
-| Silver `cells` | 238 k | < 20 MB |
+| Silver `ndvi` | 239 304 × 293 = **70 116 072** | ~2–3 GB Parquet |
+| Silver `cells` | 239 304 | 6.6 MB |
 | Silver `weather` | 765 days (5 seasons × 153) | < 1 MB |
-| Gold weekly (all cells) | 238 k × 110 weeks ≈ **26 M** | ~1–2 GB |
-| Gold weekly (cropland only) | ~193 k × 110 ≈ **21 M** | ~0.8–1.5 GB |
+| Gold weekly (all cells) | 239 304 × 110 weeks ≈ **26 M** | ~1–2 GB |
+| Gold weekly (cropland only) | 194 778 × 110 ≈ **21 M** | ~0.8–1.5 GB |
+
 
 **Measured, not estimated** (real smoke runs on 2026-11-10, window 15–24 June):
 
@@ -230,6 +244,29 @@ thing to plan around. Concurrency is network-bound: `--workers 4` measured 2.5×
 sequential, and back-to-back runs varied 254–313 s for the same 24 assets, so plan with the slower
 figure. Raising `--workers` further gains little and risks Earth Search throttling.
 
+### 3.5.1 WorldCover on the 10 m NDVI lattice (reprojection recipe)
+
+ESA WorldCover is served as a 10 m **EPSG:4326** COG. To align its classes with the NDVI pixels:
+
+1. Convert the analysis envelope from EPSG:32636 to EPSG:4326 with `transform_bounds` and read only
+   that window from the COG (`N30E030`, 47.4 MB).
+2. `rasterio.warp.reproject` with **nearest neighbour** onto the **same 10 m UTM lattice** used for
+   NDVI (`from_origin(295 100, 3 453 800, 10, 10)`), so WorldCover pixel *(r, c)* and NDVI pixel
+   *(r, c)* cover the same square metre of ground. Nearest is mandatory here: interpolating class
+   codes would fabricate classes that do not exist.
+3. Reshape the 5 080 × 4 870 class array into 508 × 10 × 487 × 10 blocks and count classes per block
+   **over in-AOI pixels only** — so `cropland_pct`'s denominator is the cell's in-AOI pixel count, not
+   a blind 100.
+4. `worldcover_class` = per-cell majority class; **ties break to the lowest class code** (argmax over
+   the ascending class list), which is deterministic and reproducible.
+5. `is_cropland = cropland_pct >= 50`.
+
+The result is cached as `data/silver/_cache/worldcover_<x0>_<y0>_487x508.npy`, so `cells` rebuilds in
+~2 s without re-reading the COG.
+
+Measured AOI class shares (in-AOI 10 m pixels): cropland 78.48 %, bare 15.00 %, built 3.68 %,
+wetland 1.88 %, trees 1.04 %, water 0.63 %, sparse 0.20 %, shrub 0.13 %.
+
 ### 3.6 Cropland mask
 
 Source: **ESA WorldCover 10 m 2021 v200**, class `40` (cropland), tile `N30E030`, CC BY 4.0, served as
@@ -237,9 +274,10 @@ a COG from `esa-worldcover.s3.eu-central-1.amazonaws.com` (verified `200 OK`, 47
 
 Measured over the AOI:
 
-- **78.5 %** of 10 m pixels are cropland; built-up 15.0 %, wetland 1.9 %, trees 2.6 %, water 0.6 %.
-- At 100 m, **81.0 %** of cells have ≥ 50 % cropland pixels → **~193 000 cropland cells**, ~45 000
-  non-cropland.
+- **78.48 %** of 10 m pixels are cropland; bare 15.00 %, built 3.68 %, wetland 1.88 %, trees 1.04 %,
+  water 0.63 %, sparse 0.20 %, shrub 0.13 %.
+- At 100 m, **194 778 of 239 304 kept cells (81.4 %) have ≥ 50 % cropland pixels** — measured with
+  `cli cells` on 2026-11-10. `cropland_pct` p10/p50/p90 = 5 / 98 / 100 %.
 - A cell is `is_cropland = true` when `cropland_pct ≥ 50`; `cropland_pct` and `worldcover_class` are
   kept so the threshold can be changed without re-reading the COG.
 - Filtering to cropland removes ~19 % of cells, mostly urban fringes and canals, and prevents built-up
@@ -249,6 +287,10 @@ Measured over the AOI:
 Limitations: WorldCover is a **2021 static snapshot**, so land-use change after 2021 and mixed 100 m
 cells introduce classification error. `is_cropland` is nullable when the mask has no coverage.
 Attribution requirement: the README (Phase 9) must credit **ESA WorldCover 10 m 2021 v200, CC BY 4.0**.
+The reprojection recipe that puts WorldCover on the 10 m NDVI lattice is in §3.5.1.
+
+**Measured 2026-11-10** (`cli cells`): 239 304 rows, **194 778 cropland cells** (81.4 % of kept
+cells), cropland_pct p10/p50/p90 = 5 / 98 / 100 %. Median in-AOI pixels per cell 100.
 
 ### 3.7 Cloud filter and weekly sampling
 
@@ -331,11 +373,28 @@ Raw Bronze files are COGs per `(tile, year, date, band)`; no Parquet.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `cell_id` | int32 | FK → `cells` |
-| `date` | date | acquisition date |
-| `ndvi` | float32, null | mean of unmasked 10 m NDVI; null if no valid pixel |
-| `valid_pixels` | uint16 | unmasked 10 m pixels (0–100) |
-| `total_pixels` | uint16 | 100 by construction |
-| `masked_pct` | float32 | 100 × (1 − valid/total) |
+| `date` | date | acquisition date (also stored inside each file) |
+| `ndvi` | float32, null | mean of valid 10 m NDVI; **null** when below the valid-fraction gate or no valid pixel |
+| `valid_pixels` | uint8 | 10 m pixels that are SCL-unmasked **and** have a valid NDVI (0–100) |
+| `total_pixels` | uint8 | in-AOI 10 m pixels in the cell (0–100; < 100 on the AOI boundary) |
+| `masked_pct` | float32 | 100 × (1 − valid_pixels / total_pixels); 100 when the tile footprint misses the cell |
+
+Every kept cell is written for **every** date, so `rows = dates × 239 304` even on a date where one
+tile is missing (the uncovered cells then hold `valid_pixels = 0`, `ndvi = NULL`, `masked_pct = 100`).
+
+**Masking rules (config `silver.masked_scl_classes`).** Masked: 0 no-data, 1 saturated, 2 dark area,
+3 cloud shadow, 8 cloud medium, 9 cloud high, 10 thin cirrus, 11 snow/ice. Kept: 4 vegetation, 5 bare,
+6 water, 7 unclassified. `ndvi = (NIR − Red) / (NIR + Red)` on reflectance, and a pixel only counts
+when both bands are present (`DN > 0`) and the denominator is positive — so a 0/0 pixel is null, not
+0, and cannot drag a cell mean.
+
+**Tile mosaic (`silver.tile_priority = ["36RTV", "36RUV"]`).** Both tiles are read into one global 10 m
+canvas; **first valid pixel wins**, so 36RTV has priority in the ~9.8 km overlap (20.1 % of the AOI).
+The alternative (averaging the overlap) would halve sensor noise but change the meaning of every
+overlap cell mid-series; it is deferred until the measured overlap bias justifies it.
+
+**Valid-fraction gate:** `ndvi` is null when fewer than `silver.min_valid_fraction = 0.50` of a cell's
+in-AOI pixels are valid. `masked_pct` is still written so a null can be explained.
 
 No weather columns here: weather lives in its own table and is joined in Gold or at query time — this
 keeps Silver rows narrow and avoids repeating ~5 values per row ~70 M times.
@@ -490,6 +549,49 @@ Why these settings, measured on the 2019 and 2023 smoke files:
   all 48 decoded arrays still match the pre-change hashes, so the whole download → decode → write path
   is bit-exact.
 
+### 3.15 Bronze → Silver processing rules (Phase 3, implemented and measured)
+
+Implemented in `src/delta_crops/transform/`: `grid.py` (grid + AOI masks), `reflectance.py` (scale,
+NDVI, SCL mask), `bronze_reader.py` (ledger-verified reads), `silver.py` (per-date mosaic and 100 m
+aggregation), `cells.py`, `weather.py`, `stability.py`, `cli.py`.
+
+**Per-date pipeline.** For each ledger date: verify every Bronze asset (size, and SHA-256 by default),
+read the AOI windows of B04/B08 at 10 m and SCL resampled to the B04 grid with nearest neighbour, mask
+with `silver.masked_scl_classes`, place both tiles on one global 10 m canvas (first valid pixel wins,
+priority 36RTV → 36RUV), average each 10 × 10 block into a 100 m cell, then write one Parquet file.
+
+**Measured (2026-11-10, this machine):**
+
+| Item | Measured |
+| --- | --- |
+| Wall time per date | 1.5–2.0 s (median ~1.6 s); single-tile dates 0.4–1.5 s |
+| Peak RSS (whole run) | ~1.0 GB |
+| SHA-256 verification of one date (6 assets, ~88 MB) | **0.066 s** vs 0.001 s without → negligible |
+| Rows per date | 239 304 (every kept cell, always) |
+| NDVI range on 2023-07-02 | −0.988 … 0.992 |
+
+**Idempotency.** Each file is written to a `*.parquet.tmp` sibling and `os.replace`d into place, so a
+crash never leaves a half-written file. A date whose output exists and reports the expected row count
+is skipped (re-run of July 2023: 7/12 skipped, 8.3 s); `--force` rebuilds. Bronze is only ever read,
+and only through the ledger — a missing file, size mismatch or checksum mismatch makes the date fail
+loudly instead of silently producing a short file.
+
+**Single-tile dates.** The cloud filter is per tile, so some dates have only one tile (e.g. 2023-07-05
+is 36RTV only; 2019-09-14 is 36RUV only). Those dates still write all 239 304 cells; cells the present
+tile does not cover get `valid_pixels = 0`, `ndvi = NULL`, `masked_pct = 100`, and the date is logged
+with the tile list it actually used.
+
+**SCL evidence before freezing the mask.** `cli scl` reports per-year class shares over in-AOI pixels.
+2023 (partial, July): class 4 = 73.81 %, class 5 = 19.90 %, class 6 = 0.15 %, class 7 = 0.80 %,
+class 2 = 0.001 %, class 3 = 0.22 %, class 8/9 = 0.80/0.39 %. Both gate classes are far below the 5 %
+threshold, so the mask in config stands unchanged. Flooded rice is therefore *not* being labelled
+water/dark in this AOI at a scale that matters.
+
+**Tile overlap audit (36RTV vs 36RUV).** Over every dual-tile date the code records the median absolute
+NDVI difference in the overlapping pixels. July 2023: 11 dual-tile dates, median-across-dates
+**0.0064**, worst date 2023-07-20 at **0.0191**. That is below the 0.02 threshold, so first-valid-pixel
+priority (no averaging) stands. The full-series numbers are in `data/silver/_reports/tile_overlap.parquet`.
+
 ---
 
 ## 4. Repository layout
@@ -554,6 +656,18 @@ pytest -q
 | D-019 | 2026-11-10 | 4 concurrent asset downloads (`--workers 4`) | Measured 2.5× wall-clock speedup (638 s → 254–313 s per 24 assets); network-bound, so more workers add little and risk throttling |
 | D-020 | 2026-11-10 | Bronze COGs: DEFLATE + `predictor=2` + 512 tiles + **no overviews**; ZSTD rejected | Overviews cost 3.9 MB on a 10.9 MB band and Silver never reads them (26.3 % smaller without). ZSTD is only 5 % smaller but needs libzstd in the reader, so DEFLATE wins on portability |
 | D-021 | 2026-11-10 | Weather is fetched by `ingest` for every year in the window **and** by a standalone `weather` command | Lets the cheap weather half of ingestion run (and be proven) without touching imagery; same ledger, so both are idempotent |
+| D-022 | 2026-11-10 | Grid is 487 × 508 = 247 396 envelope cells, **clipped to the AOI polygon → 239 304 kept cells** | The envelope is an axis-aligned box around a rotated AOI; 8 092 corner cells are outside the polygon and would be permanent NULLs. Kept count is inside the agreed 236–242 k band |
+| D-023 | 2026-11-10 | `silver.min_valid_fraction = 0.50`; `ndvi` is NULL below it, `masked_pct` is always written | Half a cell of valid pixels is the minimum for a defensible 100 m mean; keeping `masked_pct` means a NULL can always be explained rather than looking like missing data |
+| D-024 | 2026-11-10 | `valid_pixels` = SCL-unmasked **and** valid NDVI (DN > 0 both bands, denominator > 0); the cell mean divides by this same count | One definition used everywhere; a 0/0 pixel is null, not 0, so it cannot drag the mean. `masked_pct = 100·(1 − valid/in-AOI total)` counts only in-AOI pixels |
+| D-025 | 2026-11-10 | SCL is warped to the 10 m B04 grid with **nearest neighbour**, not block-replicated | Measured: the 20 m SCL origin is 10 m off the B04 origin, so 2×2 replication would shift every class by one pixel. The naive "SCL = 2× resolution, aligned" assertion failed on 2023-07-02 and was replaced with the reprojection |
+| D-026 | 2026-11-10 | Mask set `{0,1,2,3,8,9,10,11}` dropped; `{4,5,6,7}` kept | Gates on measured SCL shares: class 2 = 0.001 %, class 7 = 0.80 % in 2023, far from the 5 % stop line, so flooded rice is not being lost |
+| D-027 | 2026-11-10 | Tile mosaic is **first valid pixel wins**, priority 36RTV → 36RUV | Measured overlap median difference 0.0064 across dates (worst 0.0191) < 0.02, so averaging buys noise reduction worth less than the mid-series change in meaning it would cause |
+| D-028 | 2026-11-10 | SHA-256 verification **on by default**, `--no-verify-checksum` for dev | Costs 0.066 s/date (measured) — negligible against a 1.6 s date — and catches a truncated or swapped Bronze file, which would otherwise silently corrupt Silver |
+| D-029 | 2026-11-10 | Per-date Parquet written atomically (`*.tmp` + `os.replace`); rerun skips valid outputs, `--force` rebuilds | Idempotency with no partial files after Ctrl-C; skipping is keyed on the exact expected row count, not just file presence |
+| D-030 | 2026-11-10 | Single-tile dates still write all 239 304 cells | Keeps `rows = dates × cells` true for every date, so Gold can left-join on `(cell_id, date)` without special cases; uncovered cells are `valid_pixels=0, ndvi=NULL, masked_pct=100` |
+| D-031 | 2026-11-10 | Chinese `date` column stored inside every Parquet, partitions `year=/month=/` | `date` survives a file being moved out of its hive path, and DuckDB still prunes on the partition keys |
+| D-032 | 2026-11-10 | Cross-era stable-target test **blocked**, not loosened | Measured: best 1 km box is 27.1 % water / 15.1 % desert, far from the required 90 %. Tolerances and the 1 km requirement are unchanged; alternatives are put to the user |
+| D-033 | 2026-11-10 | `duckdb>=1.1` added to dependencies | Silver acceptance requires timing a real query on the hive layout; DuckDB is the query engine named in the architecture |
 
 ## 7. Open questions for later phases
 

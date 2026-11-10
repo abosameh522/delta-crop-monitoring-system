@@ -66,6 +66,18 @@ class Quality:
 
 
 @dataclass(frozen=True)
+class Silver:
+    """Rules that turn Bronze rasters into Silver tables (Phase 3)."""
+
+    min_valid_fraction: float
+    masked_scl_classes: tuple[int, ...]
+    tile_priority: tuple[str, ...]
+    max_scl_dark_pct: float
+    max_scl_unclassified_pct: float
+    stable_target: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
 class Config:
     name: str
     bbox: BBox
@@ -74,6 +86,7 @@ class Config:
     grid: Grid
     sources: Sources
     quality: Quality
+    silver: Silver
 
 
 def config_path(path: str | Path | None = None) -> Path:
@@ -115,6 +128,14 @@ def load_config(path: str | Path | None = None) -> Config:
             max_scene_cloud_pct=float(raw["quality"]["max_scene_cloud_pct"]),
             min_weekly_observations=int(raw["quality"]["min_weekly_observations"]),
             max_weekly_masked_pct=float(raw["quality"]["max_weekly_masked_pct"]),
+        ),
+        silver=Silver(
+            min_valid_fraction=float(raw["silver"]["min_valid_fraction"]),
+            masked_scl_classes=tuple(int(c) for c in raw["silver"]["masked_scl_classes"]),
+            tile_priority=tuple(str(t) for t in raw["silver"]["tile_priority"]),
+            max_scl_dark_pct=float(raw["silver"]["max_scl_dark_pct"]),
+            max_scl_unclassified_pct=float(raw["silver"]["max_scl_unclassified_pct"]),
+            stable_target=raw["silver"].get("stable_target"),
         ),
     )
 
