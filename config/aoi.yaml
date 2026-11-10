@@ -151,3 +151,26 @@ data_quality:
     - "2023-07-07"
     - "2023-08-06"
     - "2023-09-05"
+
+#: Phase 5 Gold rules. ISO weeks 19-38 are fully inside 1 May - 30 Sep in every
+#: season year, so a same-ISO-week anomaly compares equal-length weeks. Weeks
+#: 17/18/39/40 are partial in at least one year and stay in Silver only.
+gold:
+  weeks:
+    first: 19
+    last: 38
+  min_observations: 2
+  max_masked_pct: 50.0
+  #: Leave-one-year-out baseline needs this many usable baseline years.
+  min_baseline_years: 3
+  #: Daily Tmax >= threshold_c on a run of >= min_consecutive_days makes every
+  #: day of the run a heatwave day (defined before any NDVI response, D-045).
+  heatwave:
+    threshold_c: 40.0
+    min_consecutive_days: 3
+  #: Build gate: stop before writing Gold if any season exceeds this NULL share.
+  max_gate_null_pct: 30.0
+  #: Orbit metadata cache, written under Silver's cache (Bronze stays read-only).
+  orbit_cache: "silver/_cache/orbits.parquet"
+  duckdb_threads: 4
+  duckdb_memory_limit: "3GB"

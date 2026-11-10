@@ -78,6 +78,28 @@ class Silver:
 
 
 @dataclass(frozen=True)
+class Heatwave:
+    threshold_c: float
+    min_consecutive_days: int
+
+
+@dataclass(frozen=True)
+class Gold:
+    """Rules that turn Silver into the weekly Gold tables (Phase 5)."""
+
+    week_first: int
+    week_last: int
+    min_observations: int
+    max_masked_pct: float
+    min_baseline_years: int
+    heatwave: Heatwave
+    max_gate_null_pct: float
+    orbit_cache: str
+    duckdb_threads: int
+    duckdb_memory_limit: str
+
+
+@dataclass(frozen=True)
 class Config:
     name: str
     bbox: BBox
@@ -88,6 +110,7 @@ class Config:
     quality: Quality
     silver: Silver
     data_quality: dict[str, Any] | None = None
+    gold: Gold | None = None
 
 
 def config_path(path: str | Path | None = None) -> Path:
@@ -139,7 +162,37 @@ def load_config(path: str | Path | None = None) -> Config:
             max_scl_unclassified_pct=float(raw["silver"]["max_scl_unclassified_pct"]),
             stable_target=raw["silver"].get("stable_target"),
         ),
+        gold=_load_gold(raw.get("gold")),
     )
+
+
+def _load_gold(raw: dict[str, Any] | None) -> Gold | None:
+    """Parse the Phase 5 block; absent means Gold is not configured yet."""
+    if raw is None:
+        return None
+    heatwave = raw["heatwave"]
+    return Gold(
+        week_first=int(raw["weeks"]["first"]),
+        week_last=int(raw["weeks"]["last"]),
+        min_observations=int(raw["min_observations"]),
+        max_masked_pct=float(raw["max_masked_pct"]),
+        min_baseline_years=int(raw["min_baseline_years"]),
+        heatwave=Heatwave(
+            threshold_c=float(heatwave["threshold_c"]),
+            min_consecutive_days=int(heatwave["min_consecutive_days"]),
+        ),
+        max_gate_null_pct=float(raw["max_gate_null_pct"]),
+        orbit_cache=str(raw["orbit_cache"]),
+        duckdb_threads=int(raw["duckdb_threads"]),
+        duckdb_memory_limit=str(raw["duckdb_memory_limit"]),
+    )
+
+
+def require_gold(config: Config) -> Gold:
+    """Return the Gold rules or fail loudly: thresholds have no implicit defaults."""
+    if config.gold is None:
+        raise ValueError("config is missing the 'gold' block (Phase 5 thresholds)")
+    return config.gold
 
 
 def data_dir() -> Path:

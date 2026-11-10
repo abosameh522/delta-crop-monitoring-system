@@ -2,10 +2,10 @@
 
 ## Status
 
-- **Phase:** 4 — Data quality **DONE**; Phase 3 accepted DONE.
-- **Current step:** Phase 4 accepted-plan work complete; final report and runbook saved in docs/phase4-quality.md.
-- **Done:** diagnosis found no Silver count inconsistency. May 7–17 cohort spans both tiles; long tails are non-cropland SCL-masked cells, not persistent swath DN=0. Approved defaults are in config. Real quality run: 293 ledger dates, 70,116,072 rows, all critical checks passed in 18.76 s. 15 dual-tile NULL alerts retained; 12 single-tile dates reported separately; no season exceeds 10% prevalence of >=13-day gaps. DN-floor audit measured 14 fixed dates, 20.16 s, no rebuild.
-- **Half-done:** nothing; no failing tests or unfinished Phase 4 steps.
+- **Phase:** 5 — Gold layer **DONE** (2026-11-11); Phase 4 accepted DONE.
+- **Current step:** Gold tables built, verified, documented; 7 new tests pass; Phase 6 not started.
+- **Done:** Weekly gate decomposition (structural vs per-cell NULL) showed 2023 at 27.54 % total (15.0 points structural, 12.5 per-cell) — under 30 % gate, no rule relaxation. Orbit cache (574 rows, no date has >1 orbit) written under Silver cache. Cropland orbit diagnostic: same-orbit 5-day pairs are temporal, not orbit; cross-orbit 2–3 day pairs show R064 reads ~0.005–0.010 higher NDVI in all 5 years but phenology confounds; earlier "offset is small/absent" claim withdrawn. Heatwave definition: Tmax ≥ 40 °C in runs ≥ 3 days (47 days / 9 episodes in 765 days). Rainfall: 5.4 mm total, no day >1 mm. Anomaly: leave-one-year-out, current-week status precedence, no smoothing. Weekly tables: 4,786,080 rows/year × 5 = 23,930,400; weather 100 rows; anomaly 23,930,400. All 65 tests pass; verify shows zero bad_null/bad_ok/bad_insuff; sample query 20 rows in 0.34 s.
+- **Half-done:** nothing.
 - **Gap decision:** D-036 adopts >10 days info, >=13 alert, >10% seasonal alert; original ~20% review gate resolved. Never fill gaps.
 - **Silver DN rule:** keep DN>0; no rebuild. Audit: max NULL-share increase under DN>1 is 0.1914 pp all cells / 0.0303 pp cropland; up to 965 cropland cells/date change by >0.01.
 - **Tests:** 58 passed in 1.87s; 19 new quality tests. NaN-corruption initially exposed JSON serialization failure; fixed and tests pass. Full disposable-copy corruption acceptance: critical ndvi_range detected, CLI exit 1, original SHA-256 unchanged.
@@ -20,7 +20,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
 | 4 | Data quality | DONE | All 293 ledger dates / 70,116,072 rows passed critical checks; 58 tests pass; corruption CLI exit 1; DN audit and D-036 onward documented. |
-| 5 | Gold layer | TODO | Leakage rule applies to model features |
+| 5 | Gold layer | DONE | Weekly gate passed (max 27.54%), anomaly leave-one-out, heatwave ≥40°C/≥3d, orbit cache + diagnostic. 7 new tests; 65 total pass. |
 | 6 | Orchestration | TODO | Prefect 3 |
 | 7 | Modeling | TODO | Baseline computed from training years only |
 | 8 | Dashboard | TODO | |

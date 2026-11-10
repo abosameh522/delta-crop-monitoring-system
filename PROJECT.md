@@ -690,6 +690,10 @@ pytest -q
 | D-040 | 2026-11-11 | Structural/data-integrity failures are critical; missingness is alerts/information; persist JSON before raising | Schema/dtypes, NDVI range, duplicate keys, row count, valid_pixels>total_pixels, required NULLs, foreign cell IDs, wrong date contents and missing ledger-date outputs stop the CLI with nonzero exit. Input list comes from all 293 ledger dates, not file discovery. Schema is six explicit fields; counts uint8, NDVI/masked_pct float32, cell_id int32, physical date date32. |
 | D-041 | 2026-11-11 | Approved alert defaults: masked_pct>50%; dual-tile NULL>50% OR leave-one-out seasonal median+6×raw MAD with >=5 other dates | Single-tile dates get separate context, never a NULL-rate alert for single-tile status. With zero MAD use strictly above peer median; with too few peers use absolute criterion only. All values and severities are in config; actual run retains 15 dual-tile NULL alerts and all 12 single-tile dates as context. |
 | D-042 | 2026-11-11 | Keep Silver DN>0/no rebuild after a fixed 14-date DN-floor measurement; report local effects | Six original July dates plus one date per other month in both eras. DN>0 replay reproduced saved counts/NDVI. DN>1 added at most 0.1914 percentage points NULL across all cells, 0.0303 points on cropland; up to 965 paired cropland cells/date changed NDVI by >0.01. Supports retaining Silver for current aggregate use, with local prediction limitations. No validity rule or Silver output changed. |
+| D-043 | 2026-11-11 | Weekly rule: ISO weeks 19–38, ≥2 observations, mean masked_pct ≤50, status NULL unless ok | Structural NULL share (weeks with <2 AOI dates) and per-cell NULL share measured separately (see Phase 5 gate table). 2023: 15.0 points structural, 12.5 points per-cell = 27.54 % total; cropland 27.76 %. max_weekly_masked_pct is the deciding factor for 458 / 123 / 157 / 1,172 / 42 cell-weeks (2019–2023). No interpolation or fill. |
+| D-044 | 2026-11-11 | Leave-one-year-out anomaly: same ISO week, ok years only, no smoothing, current-week status wins | Baseline mean of up to 4 years; <3 → no_baseline. Current-week status (insufficient/too_cloudy) overrides no_baseline; only ok status exposes anomaly/zscore. Descriptive only; Phase 7 must recompute from training years. |
+| D-045 | 2026-11-11 | Heatwave: daily Tmax ≥ 40.0 °C inside a run of ≥ 3 consecutive days (window 1 May–30 Sep) | Chosen from real 765-day pool: 47 days (6.1 %) in 9 episodes; 35 °C runs cover 73 %, 38 °C runs 29 %. 2023: 18 heatwave days in 4 episodes. Run detection on full daily series, split at week edges. 40 °C is the pooled p90 (40.2) rounded. |
+| D-046 | 2026-11-11 | Orbit metadata cached under Silver; per-week orbit_mix and n_orbits; diagnostic is descriptive | STAC product_uri parsed, no date has >1 orbit. 5-day pairing is same orbit (not cross-orbit). Cross-orbit pairs (2–3 d) show R064 reads ~0.005–0.010 higher than R021 in all 5 years, but phenology confounds it; earlier claim that offset is small/absent on cropland is withdrawn. Labelled, not corrected. |
 
 ### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
 
@@ -771,3 +775,10 @@ with local DN-floor limitations explicitly retained. Phase 5 has not started.
 - Exact heat-wave definition for `heatwave_days` (Phase 5).
 - Exact stress threshold and forecast horizon (Phase 7).
 - Whether a 20 m "hotspot" Gold table is worth the extra volume (propose only if needed).
+- **Open, unexplained (logged at Phase 4 acceptance, 2026-11-11):** on **2021-07-10**
+  (36RTV + 36RUV) **36.70 %** of the invalid in-AOI pixels inside NULL cells are DN = 0;
+  SCL cloud/shadow accounts for 62.12 % and other masked SCL classes for 1.19 %. The physical
+  cause of that DN = 0 share is **not established**. Every other one of the 15 alerted dates has
+  ≤ 0.03 % non-cloud/shadow attribution. No code, config or Silver output was changed; this is a
+  known limitation, not a resolved issue, and it must be carried into the Phase 5 and Phase 9
+  limitations sections.
