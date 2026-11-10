@@ -2,13 +2,14 @@
 
 ## Status
 
-- **Phase:** 3 — Bronze → Silver **DONE** (within-orbit test 7 and remaining suite passed)
-- **Current step:** D-035 documented; verification complete; final commit and status handoff.
-- **Done:** Phases 0–2 committed. Silver full build previously verified: 293/293 dates, 239,304 kept cells/date, 194,778 cropland cells. Config-only commit 4c45fad froze within-orbit rules before comparison. Test 7 ran once: R021 red delta 0.00129999 / NDVI 0.00271462; R064 red delta 0.00150000 / NDVI 0.00206160; both PASS with 18/17 qualifying dates.
-- **Half-done:** nothing; Phase 3 complete.
-- **Failures retained:** original water delta red 0.0708 / NDVI 0.9167; ungrouped Option C red 0.0302 FAIL / NDVI 0.0034 PASS. D-035 explicitly labels revised comparison post-hoc.
-- **Tests:** 39 tests passed across two runs: test 7 once (1 passed in 0.29s), then remaining suite (38 passed, 1 deliberately deselected in 0.30s). No failing tests. Three new unit tests cover qualifying tiles/fraction, per-year eligibility and median pooling, and retaining a failing eligible group.
-- **Next:** Phase 4 plan pending approval before coding. Silver DN>0 rebuild decision remains with the user.
+- **Phase:** 4 — Data quality **IN PROGRESS**; Phase 3 accepted DONE.
+- **Current step:** real-Silver gap measurement complete; stopped at the user-defined >~20% threshold-decision gate.
+- **Done:** all 293 ledger-date files present; measured NDVI usability strictly as `ndvi IS NOT NULL`, May 1–September 30, all 239,304 kept cells per season. Per-cell longest-gap Parquet and JSON summary saved under `data/silver/_reports/quality/`. 2020: 65,045 cells (27.181%) exceed 10 days, triggering the required stop.
+- **Half-done:** Phase 4 checks/report CLI, config thresholds, DN-floor audit, corruption tests and real quality run have NOT started. No dependencies or Silver data changed.
+- **Decision pending:** retain or revise proposed 10-day gap alert after reviewing season statistics. No threshold silently selected. Gaps will remain alerts, never filled.
+- **Silver DN rule:** user decided to keep DN>0, no rebuild. DN>1 effects will be measured in Phase 4 after this gate is resolved.
+- **Tests:** previous Phase 3: 39 passed. No tests run in this measurement-only step; no test failures. Measurement script initially hit an unfinished DuckDB result; draining query results fixed it, and the full measurement completed successfully.
+- **Next:** Phase 4 checks resume once the gap-threshold decision is made: DN-floor audit, tests, real-data validation and completion report.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -18,7 +19,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
-| 4 | Data quality | TODO | |
+| 4 | Data quality | IN PROGRESS | Gap measurement complete; 2020 exceeds stop gate (27.181% over 10 days); awaiting threshold decision before checks. |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
 | 7 | Modeling | TODO | Baseline computed from training years only |
@@ -226,3 +227,38 @@ Notes:
   not proof that every surface or orbit is interchangeable.
 - Completion commit message: `test: validate frozen within-orbit rule and document D-035`.
 - Phase 4 has not started.
+
+## Phase 4 preflight — gap measurement (2026-11-10)
+
+Report: `data/silver/_reports/quality/gap_measurement_20261110T215222Z.json`.
+Per-cell longest gaps with exact start/end and attribution are in sibling
+`gap_longest_YEAR_20261110T215222Z.parquet` files. These reports are gitignored.
+
+Usable means `ndvi IS NOT NULL` under the existing 50% valid-pixel gate.
+Gap days are calendar days strictly between usable dates, plus leading/trailing
+season days. For tied longest gaps, the earliest is retained. Every gap is split
+into no-ledger-acquisition days and acquisition days with NULL cell NDVI.
+No daily cell grid was materialized; DuckDB window functions ran one season at
+a time, 4 threads, 2 GB memory limit. Ledger dates, not existing-file globs,
+defined the expected input list; all 293 expected paths existed. This is a
+presence preflight, not the planned complete critical output-validation check.
+
+| Season | Ledger dates | p50 | p90 | p99 | Max | Cells >10 days | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2019 | 59 | 7 | 9 | 14 | 69 | 2,862 | 1.196% |
+| 2020 | 59 | 9 | 11 | 14 | 97 | 65,045 | 27.181% |
+| 2021 | 60 | 6 | 7 | 14 | 72 | 4,077 | 1.704% |
+| 2022 | 59 | 7 | 9 | 14 | 29 | 18,291 | 7.643% |
+| 2023 | 56 | 9 | 12 | 16 | 21 | 30,376 | 12.693% |
+
+Successful measurement command: `.venv/bin/python /tmp/measure_phase4_gaps.py`
+(log `/tmp/phase4_gap_measurement.log`); total **5.61 s**. Assertions checked
+that every split sums to the gap length, split counts are nonnegative, every
+cell has a longest-gap record, and total no-acquisition cell-days equal
+(season days − ledger dates) × kept cells. The temporary measurement script
+is not a versioned CLI; the Phase 4 implementation is still pending.
+
+2020 violating longest gaps average 9.497 days without acquisitions and 2.176
+acquisition days with NULL NDVI. The most common is May 7–17 (11 missing days:
+9 without acquisitions + 2 NULL acquisition dates), affecting 43,642 cells.
+Stopped as required; no gap threshold/config or checks implemented.

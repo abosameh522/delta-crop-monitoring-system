@@ -683,6 +683,9 @@ pytest -q
 | D-033 | 2026-11-10 | `duckdb>=1.1` added to dependencies | Silver acceptance requires timing a real query on the hive layout; DuckDB is the query engine named in the architecture |
 | D-034 | 2026-11-10 | Stable target switched from Option B (water, class 80) to Option C (built-up, class 50) | Option B failed: B08 DN==1 floor on dark water pixels (clamping at 1 after BOA offset) and temporal instability of WorldCover water (43% look like vegetation on some dates, only 47 persistently water pixels in 2019, 0 in 2023). Option C (built-up, class 50, erosion 3 px, CC >= 1 km2, window 1-14 July, DN>1 required, median-of-date-medians pooling) has 1,057,017 pixels, 6 qualifying dates in 2019 and 4 in 2023, NDVI delta 0.0034 (PASS), red delta 0.0302 (FAIL, tolerance 0.02). Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in repo history. DN-floor limitation (NDVI on dark pixels unreliable) added to known limitations. |
 
+| D-036 | 2026-11-10 | Keep Silver DN>0; no rebuild, per user decision after Phase 3 acceptance | DN=1 floor remains a known limitation; Phase 4 must quantify excluded pixels, valid-count changes, non-NULL → NULL transitions and NULL-share changes under DN>1 without changing Silver. |
+| D-037 | 2026-11-10 | Phase 4 gap usability is NDVI IS NOT NULL; stop for threshold review when >~20% of cells exceed proposed 10 days | Real-data preflight found 27.181% in 2020 (65,045/239,304 cells); checks implementation paused pending user decision. Gaps are data alerts, AOI acquisition absence is information only, and neither is filled. Gap splits count no-ledger days separately from NULL acquisition dates, including season edges. |
+
 ### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
 
 The original water-box requirement (class 80, fixed 1 km reference box, July 1–7)
