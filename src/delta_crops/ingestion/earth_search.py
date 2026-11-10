@@ -71,8 +71,9 @@ def scene_from_item(item: Item) -> Scene | None:
 def select_best(scenes: Iterable[Scene]) -> list[Scene]:
     """Keep one scene per (tile, acquisition date): the highest processing baseline.
 
-    Measured: baseline 02.12 scenes are 20 m and not harmonized, while 05.00 (2019)
-    and 05.09 (2023) are 10 m and harmonized. The rule is "newest baseline wins".
+    A single tile-date can carry several items (e.g. 2019-05-07 has two 02.12 items and
+    one 05.00), so the newest baseline wins deterministically. Measured 10 m for both
+    05.00 (2019) and 05.09 (2023) on the real smoke assets; no resolution assumption.
     """
     best: dict[tuple[str, date], Scene] = {}
     for scene in scenes:

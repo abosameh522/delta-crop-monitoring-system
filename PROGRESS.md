@@ -2,16 +2,15 @@
 
 ## Status
 
-- **Phase:** 2 — Ingestion (Bronze) — **review fixes applied, awaiting your go-ahead for the backfill**
-- **Current step:** Phase 2 review items 1–5 completed and committed; Phase 3 NOT started
-- **Done:** Phases 0–1 accepted and committed. Phase 2 modules + 23 offline tests. Two-era smoke runs
-  re-done after the COG change (2019 + 2023), both idempotent (0 downloaded / 24 skipped on re-run).
-  Weather present and validated for all five seasons (153 days each). COG compression fixed and
-  proven lossless (48/48 files, 26.3 % smaller).
-- **Half-done:** full 5-season imagery backfill is **not run** (by design). A 5-minute accidental start
-  left 6 extra 2019 dates (28 assets, 336.5 MB) on disk — harmless, they will be skipped on resume.
-- **Tests:** 23 passing (last run 2026-11-10)
-- **Next:** run `scripts/backfill.sh` (commands in the Phase 2 section); the Phase 3 plan follows.
+- **Phase:** 2 — Ingestion (Bronze) **COMPLETE and verified**; Phase 3 plan sent, pending approval
+- **Current step:** housekeeping fixes committed; Phase 3 (Bronze → Silver) plan awaiting approval
+- **Done:** Phases 0–1 committed. Phase 2: Earth Search + Open-Meteo ingestion, append-only JSONL
+  ledger, COG compression fixed (overviews removed, lossless proof), 24 tests. **Full backfill complete
+  and user-verified:** 2019–2023, 1 722 assets, 25.81 GB, 293 dates, `verify` clean for every year.
+- **Half-done:** nothing (Phase 3 not started — no Silver code written).
+- **Tests:** 24 passing (last run 2026-11-10)
+- **Next:** implement Phase 3: Bronze → Silver (NDVI + SCL mask + 100 m
+  aggregation + weather), following the plan's decisions.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -19,8 +18,8 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | --- | --- | --- | --- |
 | 0 | Scope and setup | DONE | Committed on `main` (`c2c3ea8`) |
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
-| 2 | Ingestion (Bronze) | DONE | Earth Search + Open-Meteo; JSONL log; compression fix; awaiting backfill |
-| 3 | Bronze → Silver (cleaning) | TODO | Must implement reflectance rule + Phase 3 offset tests |
+| 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
+| 3 | Bronze → Silver (cleaning) | IN PROGRESS | Plan sent; scale-only reflectance, SCL mask, 100 m grid, weather |
 | 4 | Data quality | TODO | |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
@@ -126,21 +125,27 @@ Open-Meteo snaps the request to its model grid: the AOI centre (30.975 °N, 31.1
 `30.9666, 31.1374`, ~3 km from the geometric centre — acceptable for a 48 km AOI, noted for the
 weather table's provenance.
 
-### Full backfill (run manually)
+### Full backfill — COMPLETE (run by the user, verified 2026-11-10)
 
-Expected work from STAC (checked 2026-11-10, cloud < 40 %) with measured sizes (45.6 MB/tile-scene):
+The user ran `scripts/backfill.sh`; all five seasons are in Bronze and `verify` reports
+**"Bronze is complete for this year"** for 2019–2023: **1 722 assets**, **25.81 GB**, 293 acquisition
+dates, mean nodata 3.6–4.4 % per year, weather present for all five years. Per year on disk:
+2019 5.07, 2020 5.25, 2021 5.36, 2022 5.27, 2023 4.86 GB. Measured per tile-scene: **36RTV 21.8 MB**,
+**36RUV 67.8 MB**, **88.1 MB per acquisition date**.
 
-| Year | Tile-scenes | Assets | Est. Bronze |
+Expected work from STAC (checked 2026-11-10, cloud < 40 %) with measured sizes:
+
+| Year | Tile-scenes | Assets | Bronze on disk |
 | --- | --- | --- | --- |
-| 2019 | 113 | 339 | ~5.2 GB |
-| 2020 | 116 | 348 | ~5.3 GB |
-| 2021 | 119 | 357 | ~5.4 GB |
-| 2022 | 117 | 351 | ~5.3 GB |
-| 2023 | 109 | 327 | ~5.0 GB |
-| **Total** | **574** | **1 722** | **~26 GB**, ~5–6 h at 4 workers |
+| 2019 | 113 | 339 | 5.07 GB |
+| 2020 | 116 | 348 | 5.25 GB |
+| 2021 | 119 | 357 | 5.36 GB |
+| 2022 | 117 | 351 | 5.27 GB |
+| 2023 | 109 | 327 | 4.86 GB |
+| **Total** | **574** | **1 722** | **25.81 GB** |
 
-Run the years **sequentially in one window**: the 4-worker cap is per process, and five parallel years
-would open ~20 connections against one shared ledger.
+Runbook used (kept for re-runs; years run **sequentially in one window** — the 4-worker cap is per
+process, and five parallel years would open ~20 connections against one shared ledger):
 
 ```bash
 cd ~/delta-crop-monitoring-system
@@ -187,11 +192,9 @@ is affected.
 Notes:
 - Weather is already in Bronze for all five years; every `ingest --year` re-checks it and skips it.
 - Disk: ~26 GB total. Check with `df -h .` before starting 2022/2023.
-- A full year at 4 workers takes roughly 1–1.2 h (109–119 tile-scenes), so budget a morning.
-- **Honest note:** while checking this script's syntax a real 2019 run was started by mistake and
-  killed after ~5 minutes. It left 6 dates (2019-05-02 … 05-14, 28 assets, 336.5 MB) of
-  legitimate 2019 Bronze on disk. Nothing is corrupt or duplicated, and the run above resumes after
-  them (they will be skipped). No other year was touched.
+- A full year at 4 workers took roughly 1–1.2 h (109–119 tile-scenes).
+- The accidental 5-minute 2019 run from the review session is now simply part of the completed 2019
+  season — no extra or duplicate files.
 
 ## Upcoming phase requirements (agreed during Phase 1 review)
 

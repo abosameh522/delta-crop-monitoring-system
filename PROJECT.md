@@ -115,11 +115,14 @@ ndvi        = (nir − red) / (nir + red)   # red, nir already in reflectance
 
 - Do **not** use `raster:bands.offset` or `boa_offset_applied` from this collection.
 - Do **not** clip negatives to 0 before NDVI; use the SCL mask instead.
-- When the same acquisition has several processing baselines, keep the **highest baseline**.
-  Measured: `S2A_36RTV_20190507_1_L2A` (baseline **02.12**) is 5 490 × 5 490 at **20 m**, while
-  baseline **05.00** is 10 m; the 2019 (05.00) and 2023 (05.09) smoke scenes are **both 10 m** in
-  B04/B08. So the rule is "prefer the newest baseline", not "old baselines are 20 m" — only the 02.12
-  scene was observed at 20 m.
+- When the same acquisition has several processing baselines, keep the **highest baseline**. Measured:
+  the 2019 smoke scenes (baseline **05.00**) and 2023 smoke scenes (**05.09**) are both **10 m** in
+  B04/B08 with `scale 0.0001` / `offset −0.1` and `boa_offset_applied = true`. A 2019-05-07 tile has
+  three items (02.12, 02.12, 05.00), so duplicates are real and a deterministic winner is required.
+  **Correction (2026-11-10):** an earlier note claimed the 02.12 item was 5 490 × 5 490 at 20 m; that
+  is **not reproducible** — re-querying Earth Search shows `S2A_36RTV_20190507_1_L2A` (02.12) with
+  `proj:shape [10980, 10980]` and `spatial_resolution 10`. The claim is removed; the dedupe rule now
+  rests only on "newest baseline wins", not on an assumed resolution difference.
 - If we ever switch to CDSE JP2, the opposite applies: baseline ≥ 04.00 there **does** contain the
   +1000 offset, so subtract 1 000 DN.
 
@@ -194,10 +197,10 @@ covering both tiles):
 
 | Layer | Rows | Est. size |
 | --- | --- | --- |
-| Bronze | ~574 tile-dates × 3 bands | **~26 GB** (measured 90.8 MB per acquisition date) |
+| Bronze | 574 tile-scenes = 1 722 assets | **25.8 GB** (measured on the full backfill) |
 | Silver `ndvi` | 238 k × 293 ≈ **70 M** | ~2–3 GB Parquet |
 | Silver `cells` | 238 k | < 20 MB |
-| Silver `weather` | 755 days | < 1 MB |
+| Silver `weather` | 765 days (5 seasons × 153) | < 1 MB |
 | Gold weekly (all cells) | 238 k × 110 weeks ≈ **26 M** | ~1–2 GB |
 | Gold weekly (cropland only) | ~193 k × 110 ≈ **21 M** | ~0.8–1.5 GB |
 
@@ -210,10 +213,16 @@ covering both tiles):
 | 2019, sequential (pre-compression) | 24 | 495.1 MB | 638 s | 0.78 MB/s |
 | 2019 re-run (all skipped) | 24 | 0 MB | 3.0 s | size + SHA-256 only |
 
-Per acquisition date (two tiles, B04 + B08 + SCL): **90.8 MB mean** over 8 real dates — 36RTV ≈ 44 MB,
-36RUV ≈ 137 MB, because 36RUV's AOI window is 5 070 × 4 860 px against 5 070 × 1 463 px for 36RTV.
-Per tile-scene: ≈ 45.6 MB. Across 574 tile-scenes: **≈ 26 GB**, i.e. **~5–6 h** at 4 workers
-(~13 h sequential). Phase 1's 46 MB/date estimate was 2× too low; the 36 GB figure from the first
+Per **tile-scene** (one tile, one date, three bands), measured over the complete 574-scene backfill:
+**36RTV ≈ 21.8 MB**, **36RUV ≈ 67.8 MB** — 36RUV is 3.3× larger because its AOI window is
+5 070 × 4 860 px against 5 070 × 1 463 px for 36RTV. Per **acquisition date** (both tiles):
+**88.1 MB mean over 293 real dates**. Correction: an earlier draft quoted 44 / 137 MB per date — those
+were totals for the 8-date smoke sample, not per-scene means.
+
+**Full backfill, verified 2026-11-10:** 1 722 assets = 574 tile-scenes × 3 bands, **25.81 GB** on disk
+(2019 5.07, 2020 5.25, 2021 5.36, 2022 5.27, 2023 4.86 GB), 293 acquisition dates. Effective rate
+from the smoke runs (24 assets, 254–313 s) puts the whole backfill at **~5–6 h** with 4 workers,
+~13 h sequentially. Phase 1's 46 MB/date estimate was 2× too low; the 36 GB figure from the first
 smoke run was 28 % too high because those COGs still carried overviews. Both corrections are measured.
 
 The machine has **443 GB free** (see the Phase 1 report), so disk is not a constraint; time is the
