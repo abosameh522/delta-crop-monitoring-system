@@ -2,13 +2,13 @@
 
 ## Status
 
-- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (test 7 FAILS on Option C; not DONE)
-- **Current step:** test 7 (cross-era stable target) ran with Option C (built-up, class 50) and FAILED on red delta; full build complete; all other acceptance checks passed
-- **Done:** Phases 0–2 committed and verified. Phase 3 code: `transform/{grid,reflectance,bronze_reader,silver,cells,weather,stability,cli}.py`, `silver:` config block, 12 new tests (36 total including test 7). Grid measured 487 × 508 → 239 304 kept cells, 194 778 cropland. Cells and weather tables built. Full Silver build 293/293 dates, 0 failed, 445 s. All acceptance checks passed except test 7.
-- **Half-done:** nothing (Phase 3 code complete; test 7 is the only failing item)
-- **Blocked:** cross-era stable-target test (test 7) — Option B dropped (B08 DN floor, WorldCover water temporal instability). Option C implemented (built-up class 50, erosion 3 px, CC >= 1 km2, window 1-14 Jul, DN>1 required, median-of-date-medians pooling). Test runs but **FAILS**: delta median red = 0.0302 (> 0.02), delta median NDVI = 0.0034 (< 0.05). Phase 3 left IN PROGRESS. Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in history. Decision D-034 logged.
-- **Tests:** 36 total, 35 passing, 1 failing (test_cross_era_stable_target_runs_and_is_within_tolerance)
-- **Next:** analyse test 7 failure cause (red delta 0.0302 > 0.02) with user; do NOT start Phase 4 until test 7 passes or is resolved.
+- **Phase:** 3 — Bronze → Silver **DONE** (within-orbit test 7 and remaining suite passed)
+- **Current step:** D-035 documented; verification complete; final commit and status handoff.
+- **Done:** Phases 0–2 committed. Silver full build previously verified: 293/293 dates, 239,304 kept cells/date, 194,778 cropland cells. Config-only commit 4c45fad froze within-orbit rules before comparison. Test 7 ran once: R021 red delta 0.00129999 / NDVI 0.00271462; R064 red delta 0.00150000 / NDVI 0.00206160; both PASS with 18/17 qualifying dates.
+- **Half-done:** nothing; Phase 3 complete.
+- **Failures retained:** original water delta red 0.0708 / NDVI 0.9167; ungrouped Option C red 0.0302 FAIL / NDVI 0.0034 PASS. D-035 explicitly labels revised comparison post-hoc.
+- **Tests:** 39 tests passed across two runs: test 7 once (1 passed in 0.29s), then remaining suite (38 passed, 1 deliberately deselected in 0.30s). No failing tests. Three new unit tests cover qualifying tiles/fraction, per-year eligibility and median pooling, and retaining a failing eligible group.
+- **Next:** Phase 4 plan pending approval before coding. Silver DN>0 rebuild decision remains with the user.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -17,7 +17,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 0 | Scope and setup | DONE | Committed on `main` (`c2c3ea8`) |
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
-| 3 | Bronze → Silver (cleaning) | IN PROGRESS | 239 304 kept cells; NDVI + SCL mask + weather; full build 293/293; test 7 FAILED (delta red 0.0708 > 0.02, delta NDVI 0.9167 > 0.05) — left IN PROGRESS pending analysis |
+| 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
 | 4 | Data quality | TODO | |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
@@ -196,10 +196,33 @@ Notes:
 
 ## Upcoming phase requirements (agreed during Phase 1 review)
 
-- **Phase 3 (blocking):** reflectometry tests must include the per-era real-scene check **and** the
+- **Original Phase 3 requirement (superseded by D-034/D-035, retained for audit):** per-era real-scene check **and** the
   cross-era water sanity check (fixed 1 km water box, 1–7 July 2019 vs 2023; |Δ red reflectance| ≤ 0.02,
   |Δ NDVI| ≤ 0.05, ≥ 1 000 valid water pixels per year).
 - **Phase 5 (gate):** report the weekly NULL rate per season and per cell-week by `status` **before**
   proposing any relaxation of the ≥ 2-observations rule.
 - **Phase 9:** README must include ESA WorldCover 10 m 2021 v200 attribution (CC BY 4.0) and
   **"Weather data by Open-Meteo.com" (CC BY 4.0)** in the data-sources/attribution section.
+
+## Phase 3 completion — 2026-11-10
+
+- Silver build and previous acceptance measurements retained (293 dates; no rebuild).
+- Config-only commit 4c45fad preceded the revised comparison. No tolerances,
+  Option C pixels, DN>1 test validity, or Silver DN>0 rules changed.
+- Test 7 read the existing report and cross-checked every orbit against product
+  URIs and sensing times. Both eligible groups passed; neither was dropped.
+- Commands actually run:
+  - `.venv/bin/python -m pytest tests/test_silver.py::test_cross_era_stable_target_runs_and_is_within_tolerance -s -q`: **1 passed in 0.29s**.
+  - `.venv/bin/python -m pytest -q --deselect=tests/test_silver.py::test_cross_era_stable_target_runs_and_is_within_tolerance`: **38 passed, 1 deselected in 0.30s**.
+- The second command intentionally omitted the already-run test to honor the
+  one-run instruction. Collectively all 39 tests passed; no skips or failures.
+- Limitations: post-hoc criterion; local gitignored report needed for test 7;
+  dark-target DN=1 floor; orbit-dependent bright-surface red; ~1.05 GB peak RSS.
+- Interview explanation: we turn masked satellite pixels into consistent 100 m
+  cell observations. A reference-target check initially failed because the
+  observations mixed two orbit tracks. We kept the failures, froze a revised
+  same-orbit rule before comparing again, and evaluated both tracks without
+  changing tolerances. Passing this check supports conditional comparability,
+  not proof that every surface or orbit is interchangeable.
+- Completion commit message: `test: validate frozen within-orbit rule and document D-035`.
+- Phase 4 has not started.

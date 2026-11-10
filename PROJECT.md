@@ -134,7 +134,7 @@ ndvi        = (nir − red) / (nir + red)   # red, nir already in reflectance
    DN < 1000 (harmonized evidence) and ≥ 99.9 % of NDVI in `[-1, 1]`.
 3. Dedupe: when two baselines exist for one `(tile, date)`, the highest baseline is selected and its
    asset is 10 m.
-4. Cross-era sanity check: a **fixed 1 km reference box of open water** inside the AOI (chosen in
+4. Original cross-era requirement (superseded by D-034/D-035, retained for audit): a **fixed 1 km reference box of open water** inside the AOI (chosen in
    Phase 3 from WorldCover class 80 pixels that stay water in every season) is sampled in the same
    calendar week (1–7 July) of **2019 and 2023**. Require ≥ 1 000 valid water pixels in each year and:
    `|Δ median red reflectance| ≤ 0.02` and `|Δ median NDVI| ≤ 0.05`. A failure means the radiometry is
@@ -682,6 +682,70 @@ pytest -q
 | D-032 | 2026-11-10 | Cross-era stable-target test **blocked**, not loosened | Measured: best 1 km box is 27.1 % water / 15.1 % desert, far from the required 90 %. Tolerances and the 1 km requirement are unchanged; alternatives are put to the user |
 | D-033 | 2026-11-10 | `duckdb>=1.1` added to dependencies | Silver acceptance requires timing a real query on the hive layout; DuckDB is the query engine named in the architecture |
 | D-034 | 2026-11-10 | Stable target switched from Option B (water, class 80) to Option C (built-up, class 50) | Option B failed: B08 DN==1 floor on dark water pixels (clamping at 1 after BOA offset) and temporal instability of WorldCover water (43% look like vegetation on some dates, only 47 persistently water pixels in 2019, 0 in 2023). Option C (built-up, class 50, erosion 3 px, CC >= 1 km2, window 1-14 July, DN>1 required, median-of-date-medians pooling) has 1,057,017 pixels, 6 qualifying dates in 2019 and 4 in 2023, NDVI delta 0.0034 (PASS), red delta 0.0302 (FAIL, tolerance 0.02). Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in repo history. DN-floor limitation (NDVI on dark pixels unreliable) added to known limitations. |
+
+### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
+
+The original water-box requirement (class 80, fixed 1 km reference box, July 1–7)
+could not supply a defensible stable water target. The subsequent water-target
+comparison failed: delta red **0.0708**, delta NDVI **0.9167**. This history remains
+part of the evidence; changing the target does not erase that failure.
+
+Option C retained built-up class 50 pixels after 3-pixel erosion and removal of
+components smaller than 10,000 pixels, DN > 1 in both bands, SCL masking, and
+median-of-date-medians pooling. Its July 1–14 comparison failed on red:
+**delta red 0.0302 > 0.02**, while **delta NDVI 0.0034 <= 0.05** passed.
+
+Diagnosis: Earth Search `s2:product_uri` confirms two relative orbits: **R021**
+(sensing time 08:41 UTC) and **R064** (08:51 UTC). Built-up red separates by orbit
+within both years. Platform alone does not explain the groups. Sun elevation has
+not been shown to explain them, and a physical cause such as view angle/BRDF is
+**not proven**. Partial viewing-angle metadata does not establish causality.
+
+The user adopted the following rule; config-only commit **4c45fad** froze it
+before the first within-orbit cross-era differences were calculated:
+
+- Same Option C pixel set, DN > 1 validity, SCL mask and tile mosaic priority.
+- June 1–August 31 in 2019 and 2023; group by relative orbit derived from
+  `s2:product_uri`, cross-checked against sensing time.
+- A qualifying date has valid fraction >= 0.5 and both tiles or RUV only.
+- Each orbit needs >= 2 qualifying dates in EACH year. Every eligible orbit is
+  evaluated; no orbit may be dropped after viewing results. No eligible groups
+  is a failure, not a vacuous pass.
+- Per qualifying date median, then median of those date-medians per year.
+- Pass only if ALL eligible groups satisfy BOTH absolute tolerances:
+  red <= 0.02 and NDVI <= 0.05. Tolerances are unchanged.
+
+This is explicitly a **post-hoc change after the first failures** and therefore
+proves less than a pre-planned independent test. It is a conditional same-orbit
+sanity check, not proof of universal cross-era or cross-orbit equivalence.
+
+Test 7 ran exactly once under this rule, using the persisted real measurements:
+
+| Orbit | Dates 2019 / 2023 | Red 2019 / 2023 | NDVI 2019 / 2023 | Absolute red delta | Absolute NDVI delta | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| R021 | 18 / 17 | 0.25469999 / 0.25340000 | 0.08618258 / 0.08346797 | 0.00129999 | 0.00271462 | PASS |
+| R064 | 18 / 17 | 0.20069999 / 0.20220000 | 0.09267525 / 0.09473685 | 0.00150000 | 0.00206160 | PASS |
+
+Measurements are in gitignored `data/silver/_reports/stable_target_dates.parquet`
+(115 unique May–September dates). Its `relative_orbit` column is checked against
+saved product URIs. Missing report, invalid provenance, unexpected orbits, or
+inconsistent sensing times fail the test clearly; it never skips. This local
+artifact must be restored/recreated for a fresh checkout to run test 7; a
+versioned report-generation command remains a reproducibility limitation.
+
+Limitations carried forward:
+
+- **DN=1 floor on dark targets:** NDVI on clipped dark pixels can be unreliable.
+  Stable-target DN > 1 validity does not change Silver's DN > 0 rule.
+- **Orbit-dependent red on bright surfaces:** Phase 5 must not compare raw red
+  across orbits; retain orbit context when interpreting such measurements.
+- Existing sampled cropland measurements show mean cell NDVI changes around
+  **0.0001**, but roughly **500–700 cells/date** can change by > 0.01 on affected
+  dates (491, 707 and 531 in the sampled examples; other dates have fewer).
+  Recommendation: **do not rebuild all Silver solely on this evidence**. The
+  aggregate change is small, but local effects matter for later cell-level
+  stress predictions. The user decides whether to change validity and rebuild;
+  neither has been done.
 
 ## 7. Open questions for later phases
 
