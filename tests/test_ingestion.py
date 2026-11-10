@@ -11,7 +11,7 @@ import pytest
 from pystac import Item
 
 from delta_crops.ingestion import bronze, weather
-from delta_crops.ingestion.earth_search import expected_assets, scene_from_item, select_best
+from delta_crops.ingestion.earth_search import build_search_params, expected_assets, scene_from_item, select_best
 from delta_crops.ingestion.raster import nodata_pct
 
 
@@ -41,6 +41,39 @@ def make_item(item_id: str, day: str, baseline: str, cloud: float = 5.0) -> Item
             },
         }
     )
+
+
+def test_build_search_params_matches_the_earth_search_request() -> None:
+    params = build_search_params([30.86, 30.75, 31.36, 31.2], date(2023, 5, 1), date(2023, 9, 30), 40.0)
+
+    assert params["bbox"] == [30.86, 30.75, 31.36, 31.2]
+    assert params["datetime"] == "2023-05-01/2023-09-30"  # inclusive on both ends
+    assert params["collections"] == ["sentinel-2-l2a"]
+    assert params["query"] == {"eo:cloud_cover": {"lt": 40.0}}  # strict <, not <=
+    assert params["max_items"] is None  # paginate everything
+
+
+def test_build_search_params_allows_a_different_collection_and_threshold() -> None:
+    params = build_search_params(
+        [30.0, 30.0, 30.5, 30.5], date(2019, 6, 15), date(2019, 6, 24), 20, collection="sentinel-2-c1-l2a"
+    )
+    assert params["collections"] == ["sentinel-2-c1-l2a"]
+    assert params["query"]["eo:cloud_cover"]["lt"] == 20
+    assert params["datetime"] == "2019-06-15/2019-06-24"
+
+
+@pytest.mark.parametrize(
+    "bbox,start,end",
+    [
+        ([30.86, 30.75, 31.36, 31.2], date(2023, 9, 30), date(2023, 5, 1)),  # inverted dates
+        ([31.36, 30.75, 30.86, 31.2], date(2023, 5, 1), date(2023, 9, 30)),  # west > east
+        ([30.86, 31.2, 31.36, 30.75], date(2023, 5, 1), date(2023, 9, 30)),  # south > north
+        ([30.86, 30.75, 31.36], date(2023, 5, 1), date(2023, 9, 30)),  # bbox too short
+    ],
+)
+def test_build_search_params_rejects_bad_input(bbox: list[float], start: date, end: date) -> None:
+    with pytest.raises(ValueError):
+        build_search_params(bbox, start, end, 40.0)
 
 
 def test_select_best_keeps_highest_baseline_per_tile_and_day() -> None:
@@ -160,6 +193,25 @@ def test_compact_log_deduplicates_and_writes_parquet(tmp_path: Path) -> None:
     assert rows == 2
     assert {row["asset_key"] for row in table} == {"S2A_36RTV_20230715_0_L2A:B04", first_key}
     assert next(row for row in table if row["tile"] == "36RTV")["bytes"] == 11
+
+
+def test_write_cog_roundtrips_pixels_without_overviews(tmp_path: Path) -> None:
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from delta_crops.ingestion.raster import write_cog
+
+    array = ((np.arange(200 * 300, dtype="uint16") * 37) % 4096).reshape(200, 300)
+    path = tmp_path / "B04.tif"
+    write_cog(path, array, from_origin(500000, 3400000, 10, 10), "EPSG:32636", 0)
+
+    with rasterio.open(path) as src:
+        assert np.array_equal(src.read(1), array)  # lossless
+        assert src.overviews(1) == []  # no pyramids: Silver reads native windows
+        assert src.profile["compress"] == "deflate"
+        assert src.profile["tiled"] is True
+        assert src.nodata == 0
 
 
 def test_nodata_pct() -> None:
