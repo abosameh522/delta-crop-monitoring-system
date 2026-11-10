@@ -2,19 +2,13 @@
 
 ## Status
 
-- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (full 293-date build running)
-- **Current step:** full Silver build in background; docs updated; acceptance checks pending completion
-- **Done:** Phases 0–2 committed and verified. Phase 3 code: `transform/{grid,reflectance,bronze_reader,silver,cells,weather,stability,cli}.py`,
-  `silver:` config block, 11 new tests (35 total). Grid measured 487 × 508 → 239 304 kept cells,
-  194 778 cropland. Cells and weather tables built. July 2023 (12 dates) built and checked.
-- **Half-done:** full 293-date build running (100/293 at last check); PROJECT.md decisions D-022…D-033
-  added; PROGRESS.md being updated.
-- **Blocked:** cross-era stable-target test (test 7) — no 1 km box with ≥ 90 % water/desert exists in
-  the AOI (best 27.1 % water / 15.1 % desert). Not loosened; alternatives proposed to the user.
-- **Tests:** 35 passing (last run 2026-11-10)
-- **Next:** when the build finishes, run the acceptance checks (rows = 293 × 239 304,
-  duplicate `(cell_id, date)` check, NDVI range, DuckDB timing on the hive layout), update
-  PROGRESS.md/PROJECT.md with the measured numbers, commit, write the Phase 3 report.
+- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (not DONE — test 7 failed)
+- **Current step:** test 7 (cross-era stable target) ran and FAILED; full build complete; acceptance checks all passed except test 7
+- **Done:** Phases 0–2 committed and verified. Phase 3 code: `transform/{grid,reflectance,bronze_reader,silver,cells,weather,stability,cli}.py`, `silver:` config block, 12 new tests (36 total including test 7). Grid measured 487 × 508 → 239 304 kept cells, 194 778 cropland. Cells and weather tables built. Full Silver build 293/293 dates, 0 failed, 445 s. All acceptance checks passed except test 7.
+- **Half-done:** nothing (Phase 3 code complete; test 7 is the only failing item)
+- **Blocked:** cross-era stable-target test (test 7) — Option B config frozen and committed (`8d80592`: class 80, erosion 3 px, window 1-7 July, min_valid_pixels 1000, pooling at_least_one_date, tolerances |delta red| <= 0.02, |delta NDVI| <= 0.05). Test now runs (no longer skips) but **FAILS**: delta median red = 0.0708 (> 0.02), delta median NDVI = 0.9167 (> 0.05). Phase 3 left IN PROGRESS pending analysis. Not assumed to be a processing bug — water reflectance legitimately varies with turbidity/algae.
+- **Tests:** 36 total, 35 passing, 1 failing (test_cross_era_stable_target_runs_and_is_within_tolerance)
+- **Next:** analyse test 7 failure cause with user; do NOT start Phase 4 until test 7 passes or is resolved.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -23,7 +17,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 0 | Scope and setup | DONE | Committed on `main` (`c2c3ea8`) |
 | 1 | Architecture design (no code) | DONE | Source, baseline, grid, schemas, BOA offset, risks documented; accepted |
 | 2 | Ingestion (Bronze) | DONE | 1 722 assets, 25.81 GB, verified complete 2019–2023 |
-| 3 | Bronze → Silver (cleaning) | IN PROGRESS | 239 304 kept cells; NDVI + SCL mask + weather; full build running |
+| 3 | Bronze → Silver (cleaning) | IN PROGRESS | 239 304 kept cells; NDVI + SCL mask + weather; full build 293/293; test 7 FAILED (delta red 0.0708 > 0.02, delta NDVI 0.9167 > 0.05) — left IN PROGRESS pending analysis |
 | 4 | Data quality | TODO | |
 | 5 | Gold layer | TODO | Leakage rule applies to model features |
 | 6 | Orchestration | TODO | Prefect 3 |
