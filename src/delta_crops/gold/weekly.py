@@ -151,10 +151,12 @@ def build_weekly_ndvi(
                 "      AS n_orbits "
                 "FROM orbited GROUP BY 1, 2",
                 [glob, gold.week_first, gold.week_last]).fetchall()
-            status = STATUS_CASE.format(
+            as_of = date(year, 9, 30)
+            status = (f"CASE WHEN w.week_start + INTERVAL 6 DAY > DATE '{as_of.isoformat()}' "
+                      "THEN 'not_yet_observed' ELSE " + STATUS_CASE.format(
                 n_obs="o.n_obs", min_obs=gold.min_observations,
                 masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,
-            )
+            ) + " END")
             ok = OK_CASE.format(
                 n_obs="o.n_obs", min_obs=gold.min_observations,
                 masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,

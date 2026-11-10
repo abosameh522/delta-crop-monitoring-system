@@ -170,5 +170,5 @@ def test_cli_critical_failure_has_nonzero_exit(tiny_silver):
     pq.write_table(pa.Table.from_pylist(rows,schema=EXPECTED_SCHEMA),path)
     result=subprocess.run([sys.executable,"-m","delta_crops.quality.cli","--data-dir",str(root)],
                           capture_output=True,text=True)
-    assert result.returncode==1 and "ndvi_range" in result.stdout
+    assert result.returncode==10 and "ndvi_range" in result.stdout
     assert saved_report(root)["status"]=="failed"

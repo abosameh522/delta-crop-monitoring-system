@@ -39,7 +39,7 @@ def main() -> None:
         reports = list((copy / "silver/_reports/quality").glob("quality_*.json"))
         assert len(reports) == 1, result.stderr
         report = json.loads(reports[0].read_text())
-        assert result.returncode == 1 and any(c["check"]=="ndvi_range" and c["count"]==1 for c in report["checks"])
+        assert result.returncode == 10 and any(c["check"]=="ndvi_range" and c["count"]==1 for c in report["checks"])
         assert hashlib.sha256(source.read_bytes()).hexdigest() == original_hash
         report["acceptance_demo"] = dict(disposable_copy=True, ndvi_corruption=1.25,
             cli_exit_code=result.returncode, original_file=str(source), original_sha256=original_hash,

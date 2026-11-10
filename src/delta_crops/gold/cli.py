@@ -160,7 +160,7 @@ def main() -> int:
         return handler(args, config, root)
     except gate.WeeklyGateFailure as error:
         print(str(error))
-        return 1
+        return 11
 
 
 if __name__ == "__main__":

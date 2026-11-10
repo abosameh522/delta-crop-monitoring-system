@@ -17,7 +17,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         path = run_quality(args.data_dir or data_dir(), load_config(args.config))
-    except (QualityFailure, ValueError) as error:
+    except QualityFailure as error:
+        print(str(error))
+        return 10
+    except ValueError as error:
         print(str(error))
         return 1
     report = json.loads(path.read_text())

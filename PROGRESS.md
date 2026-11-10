@@ -2,8 +2,8 @@
 
 ## Status
 
-- **Phase:** 5 — Gold layer **DONE** (2026-11-11); Phase 4 accepted DONE.
-- **Current step:** Docs fixed (heatwave episodes split at week boundaries; zscore heavy tails documented; no visible heatwave response stated); commit 5a7fd05. Phase 6 plan sent for approval.
+- **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
+- **Current step:** Docs fixed (heatwave episodes split at week boundaries; zscore heavy tails documented; no visible heatwave response stated); commit 5a7fd05. Phase 6a implementation in progress; Docker packaging is deferred to Phase 6b.
 - **Done:** Weekly gate decomposition (structural vs per-cell NULL) showed 2023 at 27.54 % total (15.0 points structural, 12.5 per-cell) — under 30 % gate, no rule relaxation. Orbit cache (574 rows, no date has >1 orbit) written under Silver cache. Cropland orbit diagnostic: same-orbit 5-day pairs are temporal, not orbit; cross-orbit 2–3 day pairs show R064 reads ~0.005–0.010 higher NDVI in all 5 years but phenology confounds; earlier "offset is small/absent" claim withdrawn. Heatwave definition: Tmax ≥ 40 °C in runs ≥ 3 days (47 days / 9 episodes in 765 days). Rainfall: 5.4 mm total, no day >1 mm. Anomaly: leave-one-year-out, current-week status precedence, no smoothing. Weekly tables: 4,786,080 rows/year × 5 = 23,930,400; weather 100 rows; anomaly 23,930,400. All 65 tests pass; verify shows zero bad_null/bad_ok/bad_insuff; sample query 20 rows in 0.34 s. Docs corrected: heatwave episodes are Jul 14–18, Jul 22–28, Aug 5–7, Sep 6–8 (weekly split at ISO boundaries); zscore has heavy tails (p1=−8.2, p99=+7.5), anomaly is primary signal, no visible heatwave response in 2023 data, low-coverage weeks must not be compared without coverage column.
 - **Half-done:** nothing.
 - **Gap decision:** D-036 adopts >10 days info, >=13 alert, >10% seasonal alert; original ~20% review gate resolved. Never fill gaps.

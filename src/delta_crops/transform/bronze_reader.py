@@ -21,6 +21,7 @@ from rasterio.warp import reproject
 
 from delta_crops.config import BBox
 from delta_crops.ingestion.bronze import read_records
+from delta_crops.ingestion.earth_search import baseline_key
 from delta_crops.ingestion.raster import GDAL_ENV, window_for_bbox
 
 BANDS = ("B04", "B08", "SCL")
@@ -79,7 +80,15 @@ def assets_for_date(
     """
     tiles: dict[str, dict[str, Asset]] = {}
     problems: list[str] = []
+    selected: dict[tuple[str, str], dict[str, Any]] = {}
     for record in ledger.values():
+        if record.get("source") != "earth-search" or not str(record.get("acquired_at") or "").startswith(day.isoformat()):
+            continue
+        key = (record.get("tile", ""), record.get("band", ""))
+        current = selected.get(key)
+        if current is None or (baseline_key(record.get("processing_baseline")), record.get("item_id", "")) > (baseline_key(current.get("processing_baseline")), current.get("item_id", "")):
+            selected[key] = record
+    for record in selected.values():
         if record.get("source") != "earth-search":
             continue
         if not str(record.get("acquired_at") or "").startswith(day.isoformat()):

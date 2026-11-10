@@ -29,25 +29,26 @@ def build_params(lat: float, lon: float, start: date, end: date) -> dict[str, An
     }
 
 
-def fetch_daily(lat: float, lon: float, start: date, end: date, timeout: int = 60) -> dict[str, Any]:
+def fetch_daily(lat: float, lon: float, start: date, end: date, timeout: int = 60, allow_partial: bool = False) -> dict[str, Any]:
     response = requests.get(ARCHIVE_URL, params=build_params(lat, lon, start, end), timeout=timeout)
     response.raise_for_status()
     payload = response.json()
-    validate_payload(payload, start, end)
+    validate_payload(payload, start, end, allow_partial=allow_partial)
     return payload
 
 
-def validate_payload(payload: dict[str, Any], start: date, end: date) -> None:
+def validate_payload(payload: dict[str, Any], start: date, end: date, allow_partial: bool = False) -> str:
     """Fail loudly on a partial or malformed Open-Meteo response."""
     if "daily" not in payload or "time" not in payload["daily"]:
         raise ValueError("Open-Meteo response has no daily.time")
     days = payload["daily"]["time"]
     expected = (end - start).days + 1
-    if len(days) != expected:
+    if len(days) != expected and not allow_partial:
         raise ValueError(f"Open-Meteo returned {len(days)} days, expected {expected}")
-    if days[0] != start.isoformat() or days[-1] != end.isoformat():
-        raise ValueError(f"Open-Meteo range mismatch: {days[0]}..{days[-1]}")
+    if not days or days[0] != start.isoformat() or days[-1] > end.isoformat():
+        raise ValueError(f"Open-Meteo range mismatch: {days[0] if days else None}..{days[-1] if days else None}")
     for variable in DAILY_VARIABLES:
         values = payload["daily"].get(variable)
-        if values is None or len(values) != expected:
+        if values is None or len(values) != len(days):
             raise ValueError(f"Open-Meteo variable {variable} missing or wrong length")
+    return "complete" if len(days) == expected else "partial"

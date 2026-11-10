@@ -40,6 +40,13 @@ def _parse_baseline(value: object) -> tuple[int, ...]:
         return (0,)
 
 
+def baseline_key(value: object) -> tuple[int, ...]:
+    """Normalize processing baseline for numeric, deterministic ordering."""
+    if isinstance(value, tuple):
+        return value
+    return _parse_baseline(value)
+
+
 def _parse_tile(item_id: str) -> str:
     parts = item_id.split("_")
     return parts[1] if len(parts) > 1 else "unknown"
@@ -79,7 +86,7 @@ def select_best(scenes: Iterable[Scene]) -> list[Scene]:
     for scene in scenes:
         key = (scene.tile, scene.day)
         current = best.get(key)
-        if current is None or (scene.baseline, scene.item_id) > (current.baseline, current.item_id):
+        if current is None or (baseline_key(scene.baseline), scene.item_id) > (baseline_key(current.baseline), current.item_id):
             best[key] = scene
     return sorted(best.values(), key=lambda scene: (scene.day, scene.tile))
 
