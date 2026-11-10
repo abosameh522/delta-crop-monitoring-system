@@ -51,6 +51,21 @@ silver:
   #: stop and review the mask (flooded rice can be labelled water or dark area).
   max_scl_dark_pct: 5.0
   max_scl_unclassified_pct: 5.0
-  #: Cross-era stable-target check. Left null until the box is frozen from the
-  #: survey (`silver stable-target --survey`); the test skips while it is null.
-  stable_target: null
+  #: Cross-era stable-target check. Frozen from the Phase 3 survey before any
+  #: 2019-vs-2023 comparison is computed. Test skips while null.
+  stable_target:
+    #: WorldCover class used for the stable target (80 = water).
+    class: 80
+    #: Erosion in pixels (3 px = 30 m at 10 m resolution) to exclude mixed edge pixels.
+    erosion_px: 3
+    #: 1-7 July window used for both eras.
+    window: ["07-01", "07-07"]
+    #: Minimum valid eroded-target pixels required in each year (1-7 July window).
+    min_valid_pixels: 1000
+    #: Pooling rule: "at_least_one_date" means a pixel counts for a year if it is
+    #: valid (SCL-unmasked AND DN > 0 in both bands) on at least one date in that
+    #: year's window.
+    pooling: "at_least_one_date"
+    #: Tolerances for the 2019-vs-2023 comparison (not to be changed without sign-off).
+    max_delta_median_red: 0.02
+    max_delta_median_ndvi: 0.05
