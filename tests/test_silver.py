@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from delta_crops.config import Config, data_dir, load_config
-from delta_crops.transform import silver
+from delta_crops.transform import bronze_reader, silver
 from delta_crops.transform.grid import Grid, load_or_build
 from delta_crops.transform.reflectance import (
     REFLECTANCE_SCALE,
@@ -168,44 +168,52 @@ def test_is_valid_output_rejects_wrong_row_count(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# Cross-era stable target (Test 7)
+# Cross-era stable target (Test 7) — Option C: built-up (class 50)
 # --------------------------------------------------------------------------- #
-def _eroded_water_mask(grid: Grid, keep: np.ndarray, pix_mask: np.ndarray, erosion_px: int) -> np.ndarray:
-    """Eroded WorldCover water (class 80) pixels inside the AOI, kept cells only."""
+def _builtup_set(grid: Grid, keep: np.ndarray, pix_mask: np.ndarray, erosion_px: int, min_component_px: int) -> np.ndarray:
+    """Eroded WorldCover built-up (class 50) pixels, keeping only components >= min_component_px."""
     from scipy import ndimage
 
     cache = Path("data/silver/_cache")
     wc = np.load(cache / "worldcover_295100_3403000_487x508.npy")
     keep_px = np.repeat(np.repeat(keep.reshape(grid.nrows, grid.ncols), 10, axis=0), 10, axis=1)
-    water_raw = (wc == 80) & pix_mask & keep_px
-    return ndimage.binary_erosion(water_raw, iterations=erosion_px)
+    built_raw = (wc == 50) & pix_mask & keep_px
+    built_eroded = ndimage.binary_erosion(built_raw, iterations=erosion_px)
+    labels, n_comp = ndimage.label(built_eroded, structure=np.ones((3, 3), dtype=int))
+    if n_comp > 0:
+        unique, counts = np.unique(labels, return_counts=True)
+        valid = (unique > 0) & (counts >= min_component_px)
+        big_labels = unique[valid]
+        built_final = np.isin(labels, big_labels)
+    else:
+        built_final = np.zeros_like(built_eroded)
+    return built_final
 
 
-def _valid_observations_for_year(
+def _year_medians(
     year: int,
     dates: list[str],
-    water_eroded: np.ndarray,
+    built_set: np.ndarray,
     config: Config,
     root: Path,
 ) -> dict[str, object]:
-    """Return per-date and pooled validity + reflectance/NDVI values for one year.
+    """Compute per-date medians of red reflectance and NDVI on the built-up set,
+    then return the median of the date-medians (per-date medians, then median of those).
 
-    Pooling rule (from silver.stable_target.pooling): a pixel counts for the year
-    if it is valid (SCL-unmasked AND DN > 0 in both bands) on at least one date
-    in the year's 1-7 July window.
+    Qualifying dates: valid pixels >= min_valid_fraction of the set, with
+    validity = SCL-unmasked AND DN > 0 in both bands AND (if require_dn_gt_one) DN > 1 in both bands.
     """
     from datetime import date
 
     from delta_crops.transform import bronze_reader
     from delta_crops.transform.reflectance import ndvi_from_reflectance, to_reflectance
 
+    st = config.silver.stable_target
     ledger = bronze_reader.load_ledger(root)
     grid, keep, pix_mask = load_or_build(config.bbox, root / "silver" / "_cache")
 
-    per_date: list[dict[str, object]] = []
-    yearly_valid = np.zeros(water_eroded.shape, dtype=bool)
-    red_values: list[float] = []
-    ndvi_values: list[float] = []
+    date_medians: list[dict[str, object]] = []
+    qualifying_dates = 0
 
     for d in dates:
         day = date.fromisoformat(d)
@@ -214,7 +222,7 @@ def _valid_observations_for_year(
             raise RuntimeError(f"{d}: Bronze problems {problems}")
         tile_names = sorted(tiles)
 
-        h, w = water_eroded.shape
+        h, w = built_set.shape
         canvas_valid = np.zeros((h, w), dtype=bool)
         canvas_red = np.zeros((h, w), dtype="float32")
         canvas_ndvi = np.full((h, w), np.nan, dtype="float32")
@@ -230,11 +238,22 @@ def _valid_observations_for_year(
             r1, c1 = min(H, row_off + red_dn.shape[0]), min(W, col_off + red_dn.shape[1])
             sr0, sc0 = max(0, -row_off), max(0, -col_off)
             sub_r, sub_c = slice(sr0, sr0 + (r1 - r0)), slice(sc0, sc0 + (c1 - c0))
-            dn_zero = (red_dn[sub_r, sub_c] <= 0) | (nir_dn[sub_r, sub_c] <= 0)
-            scl_m = np.isin(scl[sub_r, sub_c], list(config.silver.masked_scl_classes))
-            tile_valid = (~dn_zero) & (~scl_m)
-            red_ref = to_reflectance(red_dn[sub_r, sub_c])
-            ndvi = ndvi_from_reflectance(red_ref, to_reflectance(nir_dn[sub_r, sub_c]))
+
+            red_sub = red_dn[sub_r, sub_c]
+            nir_sub = nir_dn[sub_r, sub_c]
+            scl_sub = scl[sub_r, sub_c]
+
+            dn_zero = (red_sub <= 0) | (nir_sub <= 0)
+            dn_one = (red_sub <= 1) | (nir_sub <= 1)
+            scl_m = np.isin(scl_sub, list(config.silver.masked_scl_classes))
+
+            if st.get("require_dn_gt_one", False):
+                tile_valid = (~dn_zero) & (~dn_one) & (~scl_m)
+            else:
+                tile_valid = (~dn_zero) & (~scl_m)
+
+            red_ref = to_reflectance(red_sub)
+            ndvi = ndvi_from_reflectance(red_ref, to_reflectance(nir_sub))
 
             rv = canvas_valid[r0:r1, c0:c1]
             rr = canvas_red[r0:r1, c0:c1]
@@ -243,85 +262,119 @@ def _valid_observations_for_year(
             rv[newly] = True
             rr[newly] = red_ref[newly]
             rn[newly] = ndvi[newly]
-            del red_dn, nir_dn, scl, dn_zero, scl_m, tile_valid, red_ref, ndvi
+            del red_dn, nir_dn, scl, dn_zero, dn_one, scl_m, tile_valid, red_ref, ndvi
             del rv, rr, rn, newly
 
-        valid_water = canvas_valid & water_eroded
-        count_today = int(valid_water.sum())
-        yearly_valid |= valid_water
-        yy, xx = np.nonzero(valid_water)
-        red_values.extend(canvas_red[yy, xx].tolist())
-        ndvi_values.extend(canvas_ndvi[yy, xx].tolist())
+        valid_built = canvas_valid & built_set
+        count_today = int(valid_built.sum())
+        total_built = int(built_set.sum())
+        valid_fraction = count_today / total_built if total_built > 0 else 0.0
 
-        per_date.append(
-            {
-                "date": d,
-                "tiles": ",".join(tile_names),
-                "valid_pixels": count_today,
-            }
-        )
-        del canvas_valid, canvas_red, canvas_ndvi, valid_water, yy, xx
+        if valid_fraction >= st["min_valid_fraction"]:
+            qualifying_dates += 1
+            yy, xx = np.nonzero(valid_built)
+            red_vals = canvas_red[yy, xx]
+            ndvi_vals = canvas_ndvi[yy, xx]
+            date_medians.append(
+                {
+                    "date": d,
+                    "tiles": ",".join(tile_names),
+                    "valid_pixels": count_today,
+                    "valid_fraction": valid_fraction,
+                    "median_red": float(np.median(red_vals)) if red_vals.size else None,
+                    "median_ndvi": float(np.median(ndvi_vals)) if ndvi_vals.size else None,
+                    "n_obs": int(red_vals.size),
+                }
+            )
+            print(
+                f"    {d}: tiles={tile_names} valid={count_today:,}/{total_built:,} "
+                f"frac={valid_fraction:.3f} QUALIFIES "
+                f"median_red={date_medians[-1]['median_red']:.4f} "
+                f"median_ndvi={date_medians[-1]['median_ndvi']:.4f}"
+            )
+        else:
+            print(
+                f"    {d}: tiles={tile_names} valid={count_today:,}/{total_built:,} "
+                f"frac={valid_fraction:.3f} BELOW THRESHOLD ({st['min_valid_fraction']})"
+            )
 
-    pooled = int(yearly_valid.sum())
-    red_arr = np.asarray(red_values, dtype="float64")
-    ndvi_arr = np.asarray(ndvi_values, dtype="float64")
+        del canvas_valid, canvas_red, canvas_ndvi, valid_built
+
+    assert qualifying_dates >= st["min_qualifying_dates"], (
+        f"Year {year}: only {qualifying_dates} qualifying dates, need >= {st['min_qualifying_dates']}"
+    )
+
+    # Median of date-medians
+    red_medians = [m["median_red"] for m in date_medians if m["median_red"] is not None]
+    ndvi_medians = [m["median_ndvi"] for m in date_medians if m["median_ndvi"] is not None]
     return {
-        "per_date": per_date,
-        "pooled_valid_pixels": pooled,
-        "median_red_reflectance": float(np.median(red_arr)) if red_arr.size else None,
-        "median_ndvi": float(np.median(ndvi_arr)) if ndvi_arr.size else None,
-        "n_observations": int(red_arr.size),
+        "per_date": date_medians,
+        "qualifying_dates": qualifying_dates,
+        "median_red": float(np.median(red_medians)) if red_medians else None,
+        "median_ndvi": float(np.median(ndvi_medians)) if ndvi_medians else None,
     }
 
 
 def test_cross_era_stable_target_runs_and_is_within_tolerance():
-    """Test 7: cross-era stable target on eroded pure-water pixels.
+    """Test 7: cross-era stable target on built-up (class 50) pixels.
 
-    Reads silver.stable_target from config. Skips only while it is null
-    (not the case after the Option B config commit). Computes median red
-    reflectance and median NDVI for eroded water pixels valid in each year's
-    1-7 July window, then checks |delta| against the configured tolerances.
-    No tolerance, pixel set, or window is changed if the test fails.
+    Option C: WorldCover class 50 (built-up), erosion 3 px (30 m), connected
+    components >= 1 km2 (10,000 px). Qualifying dates in 1-14 July window with
+    valid fraction >= 0.5, requiring DN > 1 in both bands (excludes B08 DN==1 floor).
+    Per-date medians are computed, then the median of date-medians per year.
+    Tolerances: |delta median red| <= 0.02, |delta median NDVI| <= 0.05.
+    No tolerance, pixel set, window, or rule is changed if the test fails.
     """
     config = load_config()
     st = config.silver.stable_target
     assert st is not None, "stable_target must be frozen before test 7 runs"
-    assert st["class"] == 80
+    assert st["class"] == 50
     assert st["erosion_px"] == 3
-    assert st["window"] == ["07-01", "07-07"]
-    assert st["min_valid_pixels"] == 1000
-    assert st["pooling"] == "at_least_one_date"
+    assert st["min_component_px"] == 10000
+    assert st["window"] == ["07-01", "07-14"]
+    assert st["min_valid_fraction"] == 0.5
+    assert st["min_qualifying_dates"] == 2
+    assert st["require_dn_gt_one"] is True
+    assert st["pooling"] == "median_of_date_medians"
     assert st["max_delta_median_red"] == 0.02
     assert st["max_delta_median_ndvi"] == 0.05
 
     data_root = data_dir()
     silver_root = Path("data/silver")
     grid, keep, pix_mask = load_or_build(config.bbox, silver_root / "_cache")
-    water_eroded = _eroded_water_mask(grid, keep, pix_mask, st["erosion_px"])
-    total_eroded = int(water_eroded.sum())
+    built_set = _builtup_set(grid, keep, pix_mask, st["erosion_px"], st["min_component_px"])
+    total_built = int(built_set.sum())
+    print(f"\n  Total built-up set pixels: {total_built:,}")
+
+    # Get all dates in the window for both years
+    ledger = bronze_reader.load_ledger(data_root)
+    all_dates = bronze_reader.imagery_dates(ledger)
+    window_start, window_end = st["window"]
+    window_start_day = int(window_start.split("-")[1])
+    window_end_day = int(window_end.split("-")[1])
+    dates_2019 = [d for d in all_dates if d.year == 2019 and d.month == 7 and window_start_day <= d.day <= window_end_day]
+    dates_2023 = [d for d in all_dates if d.year == 2023 and d.month == 7 and window_start_day <= d.day <= window_end_day]
+    dates_2019_str = [d.isoformat() for d in dates_2019]
+    dates_2023_str = [d.isoformat() for d in dates_2023]
+    print(f"  2019 dates in window: {dates_2019_str}")
+    print(f"  2023 dates in window: {dates_2023_str}")
 
     year_results: dict[int, dict[str, object]] = {}
-    for year in (2019, 2023):
-        dates = [f"{year}-07-01", f"{year}-07-03", f"{year}-07-06"] if year == 2019 else [
-            "2023-07-02",
-            "2023-07-05",
-            "2023-07-07",
-        ]
-        result = _valid_observations_for_year(year, dates, water_eroded, config, data_root)
+    for year, dates in ((2019, dates_2019_str), (2023, dates_2023_str)):
+        result = _year_medians(year, dates, built_set, config, data_root)
         year_results[year] = result
         print(
-            f"\n  {year}: pooled_valid={result['pooled_valid_pixels']:,}/{total_eroded:,} "
-            f"obs={result['n_observations']:,} "
-            f"median_red={result['median_red_reflectance']:.4f} "
+            f"\n  {year}: qualifying_dates={result['qualifying_dates']} "
+            f"median_red={result['median_red']:.4f} "
             f"median_ndvi={result['median_ndvi']:.4f}"
         )
         for pd in result["per_date"]:
-            print(f"    {pd['date']}: tiles={pd['tiles']} valid={pd['valid_pixels']:,}")
-        assert result["pooled_valid_pixels"] >= st["min_valid_pixels"]
+            print(f"    {pd['date']}: tiles={pd['tiles']} valid={pd['valid_pixels']:,} "
+                  f"median_red={pd['median_red']:.4f} median_ndvi={pd['median_ndvi']:.4f}")
 
     r19 = year_results[2019]
     r23 = year_results[2023]
-    delta_red = abs(r19["median_red_reflectance"] - r23["median_red_reflectance"])
+    delta_red = abs(r19["median_red"] - r23["median_red"])
     delta_ndvi = abs(r19["median_ndvi"] - r23["median_ndvi"])
     print(
         f"\n  delta median red = {delta_red:.4f} (tolerance {st['max_delta_median_red']})"

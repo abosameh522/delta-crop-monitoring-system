@@ -2,13 +2,13 @@
 
 ## Status
 
-- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (not DONE — test 7 failed)
-- **Current step:** test 7 (cross-era stable target) ran and FAILED; full build complete; acceptance checks all passed except test 7
+- **Phase:** 3 — Bronze → Silver **IN PROGRESS** (test 7 FAILS on Option C; not DONE)
+- **Current step:** test 7 (cross-era stable target) ran with Option C (built-up, class 50) and FAILED on red delta; full build complete; all other acceptance checks passed
 - **Done:** Phases 0–2 committed and verified. Phase 3 code: `transform/{grid,reflectance,bronze_reader,silver,cells,weather,stability,cli}.py`, `silver:` config block, 12 new tests (36 total including test 7). Grid measured 487 × 508 → 239 304 kept cells, 194 778 cropland. Cells and weather tables built. Full Silver build 293/293 dates, 0 failed, 445 s. All acceptance checks passed except test 7.
 - **Half-done:** nothing (Phase 3 code complete; test 7 is the only failing item)
-- **Blocked:** cross-era stable-target test (test 7) — Option B config frozen and committed (`8d80592`: class 80, erosion 3 px, window 1-7 July, min_valid_pixels 1000, pooling at_least_one_date, tolerances |delta red| <= 0.02, |delta NDVI| <= 0.05). Test now runs (no longer skips) but **FAILS**: delta median red = 0.0708 (> 0.02), delta median NDVI = 0.9167 (> 0.05). Phase 3 left IN PROGRESS pending analysis. Not assumed to be a processing bug — water reflectance legitimately varies with turbidity/algae.
+- **Blocked:** cross-era stable-target test (test 7) — Option B dropped (B08 DN floor, WorldCover water temporal instability). Option C implemented (built-up class 50, erosion 3 px, CC >= 1 km2, window 1-14 Jul, DN>1 required, median-of-date-medians pooling). Test runs but **FAILS**: delta median red = 0.0302 (> 0.02), delta median NDVI = 0.0034 (< 0.05). Phase 3 left IN PROGRESS. Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in history. Decision D-034 logged.
 - **Tests:** 36 total, 35 passing, 1 failing (test_cross_era_stable_target_runs_and_is_within_tolerance)
-- **Next:** analyse test 7 failure cause with user; do NOT start Phase 4 until test 7 passes or is resolved.
+- **Next:** analyse test 7 failure cause (red delta 0.0302 > 0.02) with user; do NOT start Phase 4 until test 7 passes or is resolved.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 

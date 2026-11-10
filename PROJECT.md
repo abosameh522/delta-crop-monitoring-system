@@ -289,6 +289,14 @@ cells introduce classification error. `is_cropland` is nullable when the mask ha
 Attribution requirement: the README (Phase 9) must credit **ESA WorldCover 10 m 2021 v200, CC BY 4.0**.
 The reprojection recipe that puts WorldCover on the 10 m NDVI lattice is in §3.5.1.
 
+**DN floor on dark targets:** Earth Search COGs (baseline 5.0 and 5.9) apply a BOA offset and
+clip negative reflectance at 0, which maps to DN = 1 (DN = 0 is nodata). Dark targets (water,
+deep shadow) therefore have B08 clamped at DN = 1, producing artificially low NIR reflectance
+and NDVI ≈ −1 regardless of true surface state. This makes NDVI unreliable for dark targets.
+The cross-era test excludes DN ≤ 1 pixels via `require_dn_gt_one`, but the floor remains a
+fundamental limitation for any water/dark-target analysis. Measured on 2023-07-07 36RUV:
+25,078 B08 pixels at DN=1 (0.10% of scene), 32.8% of SCL=6 water pixels.
+
 **Measured 2026-11-10** (`cli cells`): 239 304 rows, **194 778 cropland cells** (81.4 % of kept
 cells), cropland_pct p10/p50/p90 = 5 / 98 / 100 %. Median in-AOI pixels per cell 100.
 
@@ -673,6 +681,7 @@ pytest -q
 | D-031 | 2026-11-10 | Chinese `date` column stored inside every Parquet, partitions `year=/month=/` | `date` survives a file being moved out of its hive path, and DuckDB still prunes on the partition keys |
 | D-032 | 2026-11-10 | Cross-era stable-target test **blocked**, not loosened | Measured: best 1 km box is 27.1 % water / 15.1 % desert, far from the required 90 %. Tolerances and the 1 km requirement are unchanged; alternatives are put to the user |
 | D-033 | 2026-11-10 | `duckdb>=1.1` added to dependencies | Silver acceptance requires timing a real query on the hive layout; DuckDB is the query engine named in the architecture |
+| D-034 | 2026-11-10 | Stable target switched from Option B (water, class 80) to Option C (built-up, class 50) | Option B failed: B08 DN==1 floor on dark water pixels (clamping at 1 after BOA offset) and temporal instability of WorldCover water (43% look like vegetation on some dates, only 47 persistently water pixels in 2019, 0 in 2023). Option C (built-up, class 50, erosion 3 px, CC >= 1 km2, window 1-14 July, DN>1 required, median-of-date-medians pooling) has 1,057,017 pixels, 6 qualifying dates in 2019 and 4 in 2023, NDVI delta 0.0034 (PASS), red delta 0.0302 (FAIL, tolerance 0.02). Original Option B failure (delta red 0.0708, delta NDVI 0.9167) and diagnosis retained in repo history. DN-floor limitation (NDVI on dark pixels unreliable) added to known limitations. |
 
 ## 7. Open questions for later phases
 
