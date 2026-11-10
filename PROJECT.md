@@ -565,7 +565,7 @@ priority 36RTV → 36RUV), average each 10 × 10 block into a 100 m cell, then w
 | Item | Measured |
 | --- | --- |
 | Wall time per date | 1.5–2.0 s (median ~1.6 s); single-tile dates 0.4–1.5 s |
-| Peak RSS (whole run) | ~1.0 GB |
+| Peak RSS (whole run) | ~1.05 GB (**deviation**: target was < 1 GB) |
 | SHA-256 verification of one date (6 assets, ~88 MB) | **0.066 s** vs 0.001 s without → negligible |
 | Rows per date | 239 304 (every kept cell, always) |
 | NDVI range on 2023-07-02 | −0.988 … 0.992 |
@@ -575,6 +575,11 @@ crash never leaves a half-written file. A date whose output exists and reports t
 is skipped (re-run of July 2023: 7/12 skipped, 8.3 s); `--force` rebuilds. Bronze is only ever read,
 and only through the ledger — a missing file, size mismatch or checksum mismatch makes the date fail
 loudly instead of silently producing a short file.
+
+**Resource deviation:** peak RSS of ~1.05 GB (measured 1052 MB avg / 1063 MB max from `dates.parquet`,
+and 1063 MB from the full-build summary) exceeds the < 1 GB memory budget target. The dominant
+consumers are the two 10 m float32 canvases (~40 MB each) plus PyArrow/GC overhead. Acceptable on a
+15 GB machine, but worth addressing if deploying to smaller instances.
 
 **Single-tile dates.** The cloud filter is per tile, so some dates have only one tile (e.g. 2023-07-05
 is 36RTV only; 2019-09-14 is 36RUV only). Those dates still write all 239 304 cells; cells the present
