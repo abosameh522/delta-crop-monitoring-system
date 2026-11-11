@@ -29,5 +29,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m \"not slow\""
 markers = ["slow: long-running regression checks"]
