@@ -5,6 +5,55 @@ The scheduled flow processes only an explicitly configured in-progress year; wit
 
 Gold uses a per-year `as_of`: season end for complete seasons, otherwise the minimum of latest ingested acquisition and latest weather date. Weeks whose week end is after `as_of` are `not_yet_observed`.
 
-Regression: `.venv/bin/python /tmp/gold_regression.py` runs DuckDB EXCEPT in both directions and row counts against `data/_regression/gold_before`. Slow pytest: `.venv/bin/pytest -q -m slow`.
+Regression: `.venv/bin/python scripts/gold_regression.py` runs DuckDB EXCEPT in both directions and row counts against `data/_regression/gold_before`. Slow pytest: `.venv/bin/pytest -q -m slow`.
 
 Docker packaging, Docker Compose, and container memory measurements remain Phase 6b.
+
+
+## Verification correction — 2026-11-11
+
+Phase 6a is NOT DONE. The former completion claim is withdrawn. The existing
+flow contains only scheduled_noop and scheduled_flow, not four pipeline tasks.
+Gold fingerprints, dynamic per-year as_of, partial-weather pipeline integration,
+asset retry/atomic raster output, and try/finally pipeline failure logging are NOT DONE.
+Three strict xfails explicitly identify missing Gold fingerprint/retry work;
+helper tests are not evidence of wired pipeline behavior.
+
+Silver fingerprints are wired to build and CLI. An empty-assets placeholder was
+causing every comparison to differ; fixed to use the chosen ledger assets.
+Temporary fixture evidence: first build two dates -> built=2; unchanged date
+skips, changed date -> rebuilt_due_to_input_change=1, skipped=1. Six related tests
+pass. Legacy files are still reported unfingerprinted unless explicitly adopted;
+current-input adoption does not establish original production provenance.
+
+Default pytest: 93 passed, 1 deselected, 3 xfailed in 4.87s. All collected: 97.
+Slow: `.venv/bin/python -m pytest -q -m slow -o addopts='' -s` ->
+1 passed, 96 deselected in 49.41s. Gold rebuilt in 41.67s; comparisons total
+48.91s. Every table/year matched row counts and both EXCEPT directions (0).
+The script now roots all rebuilt outputs in TemporaryDirectory with read-only
+Silver input access. Anomalies read the rebuilt weekly tables, not existing Gold.
+
+Local concurrency proof used no Docker and no project data. Commands:
+
+```bash
+PREFECT_HOME=/tmp/delta_phase6a_prefect prefect server start --host 127.0.0.1 --port 8420
+PREFECT_HOME=/tmp/delta_phase6a_prefect PREFECT_API_URL=http://127.0.0.1:8420/api python spike.py
+```
+
+The one-task `spike` flow is served using
+`spike.serve(name='local-proof', global_limit=1, limit=2)`; two API run creation
+calls were submitted with asyncio.gather. API deployment metadata confirmed
+`global_concurrency_limit.limit=1`. The first serve attempt preceded server
+readiness and failed with `httpx.ConnectError: All connection attempts failed`;
+it succeeded after the server became ready. The queued second run was initially
+rescheduled by Prefect, then completed normally. UTC timestamps:
+
+```text
+A START 2026-11-11T02:14:44.456091+00:00
+A END 2026-11-11T02:14:47.456425+00:00
+B START 2026-11-11T02:15:14.854044+00:00
+B END 2026-11-11T02:15:17.854678+00:00
+```
+
+This proves local deployment serialization only, not a working product pipeline.
+Server and runner are stopped after verification; Docker remains Phase 6b.

@@ -798,3 +798,15 @@ output, and limitations. All 65 tests pass; full `build --force` completes in ~5
   weeks), and the small baseline sample (3–4 years). **Weeks with low coverage (e.g., 2023-07-03
   at 17.2 %) must not be compared with neighbouring weeks without the coverage column**; the
   mean is based on a small and potentially biased cell subset.
+
+
+### Phase 6a verification correction (2026-11-11)
+
+The earlier Phase 6a completion claim is withdrawn: the four-task flow, Gold
+fingerprints/as_of wiring, asset retry, partial-weather integration and pipeline
+failure logging are NOT DONE. Silver fingerprint fixture checks now pass after
+replacing an empty-input comparison. Historical Gold rebuilt in temporary output
+matches all 15 table/year snapshots; anomaly inputs now correctly use rebuilt
+weekly tables in the regression script. Local Prefect deployment concurrency=1
+was demonstrated with two non-overlapping runs; it does not establish product
+orchestration. Full evidence and remaining limitations: docs/phase6-orchestration.md.

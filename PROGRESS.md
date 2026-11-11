@@ -3,14 +3,13 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Phase 6a Step 1b (exit-code contract fixes) complete, awaiting review. Phase 6b (Docker) deferred.
-- **Done:** Weekly gate decomposition (structural vs per-cell NULL) showed 2023 at 27.54 % total (15.0 points structural, 12.5 per-cell) — under 30 % gate, no rule relaxation. Orbit cache (574 rows, no date has >1 orbit) written under Silver cache. Cropland orbit diagnostic: same-orbit 5-day pairs are temporal, not orbit; cross-orbit 2–3 day pairs show R064 reads ~0.005–0.010 higher NDVI in all 5 years but phenology confounds; earlier "offset is small/absent" claim withdrawn. Heatwave definition: Tmax ≥ 40 °C in runs ≥ 3 days (47 days / 9 episodes in 765 days). Rainfall: 5.4 mm total, no day >1 mm. Anomaly: leave-one-year-out, current-week status precedence, no smoothing. Weekly tables: 4,786,080 rows/year × 5 = 23,930,400; weather 100 rows; anomaly 23,930,400. All 65 tests pass; verify shows zero bad_null/bad_ok/bad_insuff; sample query 20 rows in 0.34 s. Docs corrected: heatwave episodes are Jul 14–18, Jul 22–28, Aug 5–7, Sep 6–8 (weekly split at ISO boundaries); zscore has heavy tails (p1=−8.2, p99=+7.5), anomaly is primary signal, no visible heatwave response in 2023 data, low-coverage weeks must not be compared without coverage column.
-- **Half-done:** nothing.
-- **Gap decision:** D-036 adopts >10 days info, >=13 alert, >10% seasonal alert; original ~20% review gate resolved. Never fill gaps.
-- **Silver DN rule:** keep DN>0; no rebuild. Audit: max NULL-share increase under DN>1 is 0.1914 pp all cells / 0.0303 pp cropland; up to 965 cropland cells/date change by >0.01.
-- **Exit contract (Step 1b):** single `QualityFailure` and `WeeklyGateFailure` defined in `errors.py`; `quality.report` and `gold.gate` re-export them. CLIs: ingestion 3/4, transform 3 (TransientFailure: DuckDB `IOException` only) / 4 (date or asset), quality 10, gold 11. All asserted at `main(argv)` level.
-- **Tests:** 89 collected: 84 passed, 1 skipped (Gold regression, step 3), 4 xfailed placeholders (steps 4/6/8). Corruption acceptance: critical ndvi_range detected, CLI exit 10, original SHA-256 unchanged.
-- **Next:** Step 1b review pending.
+- **Current step:** Resumed Silver fingerprint repair and evidence audit complete; Phase 6a remains IN PROGRESS, not accepted DONE.
+- **Done this session:** Fixed comparison against empty assets; 6 Silver fingerprint tests pass on temporary fixtures, including unchanged skip and one-date-only rebuild. Corrected regression script so anomaly reads temporary rebuilt weekly data. No real ingestion, backfill or Silver rebuild.
+- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, Gold per-output fingerprints, per-year partial-season as_of wired into Gold, partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
+- **Tests:** default 93 passed, 1 slow deselected, 3 strict xfailed (Gold fingerprint and two task-retry tests), 4.87s; slow 1 passed, 96 deselected, 49.41s. 97 total, not the earlier promised 84. No unexpected failing tests. A prior default run emitted a Prefect shutdown logging error; helper test now uses task.fn to avoid starting an ephemeral server.
+- **Regression:** rebuild 41.67s / total comparison 48.91s; all 15 table/year comparisons have identical rows and zero EXCEPT differences both ways. Snapshot unchanged; outputs only in TemporaryDirectory.
+- **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs. A 02:14:44.456091–02:14:47.456425 UTC; B 02:15:14.854044–02:15:17.854678 UTC on 2026-11-11. No overlap. PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
+- **Next:** Phase 6a status report recorded. Remaining implementation is NOT DONE; Phase 6b unstarted.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
