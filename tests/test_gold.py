@@ -15,6 +15,12 @@ import pytest
 from delta_crops.config import Config, load_config
 from delta_crops.gold import weather as gold_weather
 from delta_crops.gold.anomaly import build_anomaly
+from delta_crops.gold.as_of import (
+    complete_years,
+    season_end,
+    season_state,
+    week_is_observed,
+)
 from delta_crops.gold.queries import sample_query
 from delta_crops.gold.weekly import (
     STATUS_CASE,
@@ -221,3 +227,75 @@ def test_sample_query_returns_focus_season_with_coverage(gold_env: tuple[Path, C
     first = frame.iloc[0]
     assert first["coverage_pct"] == pytest.approx(50.0)  # one of two cropland cells is usable
     assert first["heatwave_days"] == 0
+
+
+# ─── as_of helper: complete vs in-progress seasons, no wall clock ───
+
+
+def _trim_weather_after(root: Path, year: int, last_day: date) -> None:
+    """Keep every other year intact but drop one year's weather after a date."""
+    path = root / "silver" / "weather.parquet"
+    table = pq.read_table(path)
+    rows = [
+        row for row in table.to_pylist()
+        if not (row["date"].year == year and row["date"] > last_day)
+    ]
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+
+
+def _add_ndvi_date(root: Path, year: int, day: date, value: float = 0.30) -> None:
+    """Append one synthetic acquisition for every fixture cell."""
+    rows = [
+        dict(cell_id=cell_id, date=day, ndvi=value, valid_pixels=100,
+             total_pixels=100, masked_pct=0.0)
+        for cell_id in (0, 1, 2, 3)
+    ]
+    target = root / "silver" / "ndvi" / f"year={year}" / f"month={day.month:02d}" / f"date={day}.parquet"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pylist(rows, schema=NDVI_SCHEMA), target)
+
+
+def test_complete_season_as_of_is_the_configured_season_end(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    state = season_state(root, config, 2023)
+    assert state.complete is True
+    assert state.as_of == date(2023, 9, 30)
+    assert state.as_of == season_end(config, 2023)  # comes from config, not a constant
+    assert complete_years(root, config, YEARS) == tuple(sorted(YEARS))
+
+
+def test_in_progress_as_of_is_min_of_last_acquisition_and_last_weather(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of - timedelta(days=2))  # imagery lags weather
+    state = season_state(root, config, 2024)
+    assert state.complete is False
+    assert state.latest_weather == as_of
+    assert state.latest_acquisition == as_of - timedelta(days=2)
+    assert state.as_of == as_of - timedelta(days=2)
+
+
+def test_incomplete_weather_keeps_a_season_out_of_the_complete_pool(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    # Season end is present, but one mid-season day is missing.
+    path = root / "silver" / "weather.parquet"
+    table = pq.read_table(path)
+    dropped = date(2024, 7, 15)
+    rows = [row for row in table.to_pylist() if row["date"] != dropped]
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+    _add_ndvi_date(root, 2024, date(2024, 9, 30))
+    assert season_state(root, config, 2024).complete is False
+    assert 2024 not in complete_years(root, config, YEARS)
+
+
+def test_week_is_observed_only_once_its_sunday_has_passed() -> None:
+    assert week_is_observed(date(2023, 9, 18), date(2023, 9, 24)) is True
+    assert week_is_observed(date(2023, 9, 25), date(2023, 9, 27)) is False
+    assert week_is_observed(date(2023, 9, 25), None) is False
