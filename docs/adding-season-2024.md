@@ -8,14 +8,14 @@ The config edit, the ingest (Ahmed, tmux) and every downstream step follow
 
 - Free space: `412G` of `475G` (63 G used, 14 %) — enough for the ~0.6 GB copies
   and the 2024 download.
-- Backups in `/tmp/pre2024` (540 MB total; `gold` is 522 MB):
+- Backups in `~/backups/pre2024` (540 MB total; `gold` is 522 MB):
   `ingestion_log.jsonl`, `ingestion_log.parquet`, `silver_weather.parquet`,
   `orbits.parquet`, `silver_reports/`, `gold/`.
 - Ledger: 1727 lines; `sha256(ingestion_log.jsonl)` =
   `f7d46103beec582a1c61eeeea6a94f4862a09444e1a308dc2f1a2963bfe173b4`, identical
   for the copy.
-- `diff -rq data/gold /tmp/pre2024/gold` → empty (exit 0).
-- Payload hash file `/tmp/pre2024/payload_2019_2023.sha256`: **2031 lines**
+- `diff -rq data/gold ~/backups/pre2024/gold` → empty (exit 0).
+- Payload hash file `~/backups/pre2024/payload_2019_2023.sha256`: **2031 lines**
   (1722 Bronze + 293 Silver NDVI + `silver/cells.parquet` + 15 Gold), 0 sidecars,
   0 paths containing `year=2024`. The earlier "expected 309" was an arithmetic
   mistake (it counted only Silver + Gold); 2031 is the correct total.
@@ -109,12 +109,12 @@ mkdir -p /tmp/post2024
 
 # Gold: build and verify a restore copy first — never delete the live one first
 rm -rf data/gold.restore
-cp -a /tmp/pre2024/gold data/gold.restore
-diff -rq data/gold.restore /tmp/pre2024/gold                      # empty
+cp -a ~/backups/pre2024/gold data/gold.restore
+diff -rq data/gold.restore ~/backups/pre2024/gold                      # empty
 (cd data/gold.restore && find . -type f -print0 | sort -z | xargs -0 sha256sum) \
   > /tmp/post2024/gold_restore.sha256
 # same sha256 list restricted to gold/ from the pre-flight payload file:
-grep ' gold/' /tmp/pre2024/payload_2019_2023.sha256 | sed 's# gold/# ./#' \
+grep ' gold/' ~/backups/pre2024/payload_2019_2023.sha256 | sed 's# gold/# ./#' \
   > /tmp/post2024/gold_expected.sha256
 diff /tmp/post2024/gold_expected.sha256 /tmp/post2024/gold_restore.sha256   # empty
 mv data/gold data/gold.bad.2024
@@ -123,8 +123,8 @@ rm -rf data/gold.bad.2024
 
 # Silver reports: same rule
 rm -rf data/silver/_reports.restore
-cp -a /tmp/pre2024/silver_reports data/silver/_reports.restore
-diff -rq data/silver/_reports.restore /tmp/pre2024/silver_reports # empty
+cp -a ~/backups/pre2024/silver_reports data/silver/_reports.restore
+diff -rq data/silver/_reports.restore ~/backups/pre2024/silver_reports # empty
 mv data/silver/_reports data/silver/_reports.bad.2024
 mv data/silver/_reports.restore data/silver/_reports
 rm -rf data/silver/_reports.bad.2024
@@ -133,5 +133,5 @@ rm -rf data/silver/_reports.bad.2024
 ```
 
 Then re-run the payload hash and diff it against
-`/tmp/pre2024/payload_2019_2023.sha256` (empty), and confirm the ledger is back
+`~/backups/pre2024/payload_2019_2023.sha256` (empty), and confirm the ledger is back
 to 1727 lines. `data/_regression/` is never written by any of this.
