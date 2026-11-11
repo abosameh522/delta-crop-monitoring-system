@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-import duckdb
 import pyarrow.parquet as pq
 
 from delta_crops.config import Config
@@ -58,21 +57,21 @@ def weather_dates_by_year(root: Path) -> dict[int, set[date]]:
 
 
 def latest_acquisition_by_year(root: Path) -> dict[int, date]:
-    """Latest date with Silver NDVI rows per year (the last processed image)."""
+    """Latest date with a Silver NDVI partition per year (the last processed image).
+
+    The Silver writer names one file per date (`date=YYYY-MM-DD.parquet`), so the
+    partition names are the acquisition dates and no pixel data has to be read.
+    """
     directory = root / "silver" / "ndvi"
-    if not directory.is_dir() or not any(directory.glob("year=*/*/*.parquet")):
+    if not directory.is_dir():
         return {}
-    glob = str(directory / "year=*" / "*" / "*.parquet")
-    con = duckdb.connect()
-    try:
-        rows = con.execute(
-            "SELECT year(date) AS yr, max(date) AS latest"
-            " FROM read_parquet(?) GROUP BY 1",
-            [glob],
-        ).fetchall()
-    finally:
-        con.close()
-    return {int(year): latest for year, latest in rows if year is not None and latest is not None}
+    latest: dict[int, date] = {}
+    for path in directory.glob("year=*/*/date=*.parquet"):
+        year = int(path.parent.parent.name.split("=", 1)[1])
+        day = date.fromisoformat(path.stem.split("=", 1)[1])
+        if year not in latest or day > latest[year]:
+            latest[year] = day
+    return latest
 
 
 def season_states(root: Path, config: Config, years: list[int] | tuple[int, ...]) -> dict[int, SeasonState]:

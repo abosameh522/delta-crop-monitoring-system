@@ -17,6 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from delta_crops.config import Config, Gold, require_gold
+from delta_crops.gold.as_of import season_states
 
 WEEKLY_SCHEMA = pa.schema(
     [
@@ -121,13 +122,17 @@ def build_weekly_ndvi(
     try:
         con.register("cells", cells)
         _orbits_relation(con, root / gold.orbit_cache)
+        states = season_states(root, config, years)
         for year in years:
+            state = states[year]
             weeks = season_weeks(year, gold.week_first, gold.week_last)
             con.register("weeks", pa.table({"week_start": pa.array(weeks, pa.date32())}))
             target = weekly_path(root, year)
             expected = kept * len(weeks)
-            if not force and target.is_file() and pq.ParquetFile(target).metadata.num_rows == expected:
-                summary["years"].append(dict(year=year, rows=expected, skipped=True))
+            if (not force and state.complete and target.is_file()
+                    and pq.ParquetFile(target).metadata.num_rows == expected):
+                summary["years"].append(dict(year=year, rows=expected, skipped=True,
+                                             as_of=state.as_of, complete=state.complete))
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             glob = str(root / "silver" / "ndvi" / f"year={year}" / "**" / "*.parquet")
@@ -151,16 +156,21 @@ def build_weekly_ndvi(
                 "      AS n_orbits "
                 "FROM orbited GROUP BY 1, 2",
                 [glob, gold.week_first, gold.week_last]).fetchall()
-            as_of = date(year, 9, 30)
-            status = (f"CASE WHEN w.week_start + INTERVAL 6 DAY > DATE '{as_of.isoformat()}' "
-                      "THEN 'not_yet_observed' ELSE " + STATUS_CASE.format(
-                n_obs="o.n_obs", min_obs=gold.min_observations,
-                masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,
-            ) + " END")
-            ok = OK_CASE.format(
-                n_obs="o.n_obs", min_obs=gold.min_observations,
-                masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,
-            )
+            as_of = state.as_of
+            if as_of is None:
+                status = "'not_yet_observed'"
+                ok = "FALSE"
+            else:
+                observed = f"w.week_start + INTERVAL 6 DAY <= DATE '{as_of.isoformat()}'"
+                status = (f"CASE WHEN NOT ({observed}) THEN 'not_yet_observed' ELSE "
+                          + STATUS_CASE.format(
+                    n_obs="o.n_obs", min_obs=gold.min_observations,
+                    masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,
+                ) + " END")
+                ok = f"({observed}) AND (" + OK_CASE.format(
+                    n_obs="o.n_obs", min_obs=gold.min_observations,
+                    masked="o.masked_pct_mean", max_masked=gold.max_masked_pct,
+                ) + ")"
             tmp = target.with_suffix(".parquet.tmp")
             try:
                 con.execute(
@@ -185,7 +195,8 @@ def build_weekly_ndvi(
             finally:
                 tmp.unlink(missing_ok=True)
             summary["years"].append(dict(year=year, rows=expected,
-                seconds=round(time.perf_counter() - started_year, 2), skipped=False))
+                seconds=round(time.perf_counter() - started_year, 2), skipped=False,
+                as_of=state.as_of, complete=state.complete))
     finally:
         con.close()
     summary["seconds"] = round(time.perf_counter() - started, 2)

@@ -299,3 +299,65 @@ def test_week_is_observed_only_once_its_sunday_has_passed() -> None:
     assert week_is_observed(date(2023, 9, 18), date(2023, 9, 24)) is True
     assert week_is_observed(date(2023, 9, 25), date(2023, 9, 27)) is False
     assert week_is_observed(date(2023, 9, 25), None) is False
+
+
+# ─── as_of wired into the real build: complete, in-progress and late-image cases ───
+
+
+def test_complete_season_never_reports_not_yet_observed(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    build_weekly_ndvi(root, config, force=True)
+    for year in YEARS:
+        statuses = set(
+            pq.read_table(weekly_path(root, year), columns=["status"])
+            .column("status").to_pylist()
+        )
+        assert "not_yet_observed" not in statuses
+
+
+def test_in_progress_weeks_after_as_of_are_not_yet_observed(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of)
+    build_weekly_ndvi(root, config, years=[2024], force=True)
+    rows = {
+        (row["cell_id"], row["week_start"]): row
+        for row in pq.read_table(weekly_path(root, 2024)).to_pylist()
+    }
+    containing = iso_week_start(as_of)
+    assert containing == date(2024, 7, 1)
+    # The week containing as_of is not yet observed even though it has one image.
+    assert rows[(0, containing)]["status"] == "not_yet_observed"
+    assert rows[(0, containing)]["ndvi_mean"] is None
+    # The previous week (Sunday 30 Jun) is evaluated, just too sparse.
+    assert rows[(0, date(2024, 6, 24))]["status"] == "insufficient_observations"
+    for week in season_weeks(2024, 19, 38):
+        if week + timedelta(days=6) > as_of:
+            assert rows[(0, week)]["status"] == "not_yet_observed"
+        else:
+            assert rows[(0, week)]["status"] != "not_yet_observed"
+
+
+def test_late_last_acquisition_in_complete_season_keeps_week_38_evaluated(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    # Last image is Friday 22 Sep, before week 38 ends on Sunday 24 Sep.
+    _add_ndvi_date(root, 2023, date(2023, 9, 22))
+    state = season_state(root, config, 2023)
+    assert state.complete is True
+    assert state.latest_acquisition == date(2023, 9, 22)
+    assert state.as_of == date(2023, 9, 30)  # config season end, not the last image
+    build_weekly_ndvi(root, config, years=[2023], force=True)
+    week38 = season_weeks(2023, 19, 38)[-1]
+    assert week38 == date(2023, 9, 18)
+    rows = {
+        (row["cell_id"], row["week_start"]): row
+        for row in pq.read_table(weekly_path(root, 2023)).to_pylist()
+    }
+    assert rows[(0, week38)]["status"] != "not_yet_observed"

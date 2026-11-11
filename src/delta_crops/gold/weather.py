@@ -17,6 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from delta_crops.config import Config, require_gold
+from delta_crops.gold.as_of import season_states
 from delta_crops.gold.weekly import season_weeks, weather_path
 
 WEEKLY_WEATHER_SCHEMA = pa.schema(
@@ -64,13 +65,34 @@ def build_weekly_weather(root: Path, config: Config, force: bool = False) -> dic
     for row in table.to_pylist():
         daily.setdefault(row["date"].year, []).append(row)
     summary: dict = {"years": []}
+    states = season_states(root, config, config.seasons.years)
     for year in config.seasons.years:
+        state = states[year]
         rows = sorted(daily.get(year, []), key=lambda row: row["date"])
         weeks = season_weeks(year, gold.week_first, gold.week_last)
-        expected_days = (config.seasons.bounds(year)[1] - config.seasons.bounds(year)[0]).days + 1
-        if len(rows) != expected_days:
-            raise ValueError(f"{year}: {len(rows)} weather days, expected {expected_days}")
+        if state.as_of is not None:
+            weeks = [week for week in weeks
+                     if week + timedelta(days=6) <= state.as_of]
+        else:
+            weeks = []
         by_date = {row["date"]: row for row in rows}
+        start, end = config.seasons.bounds(year)
+        if state.complete:
+            required_end: date | None = end
+        elif weeks:
+            required_end = weeks[-1] + timedelta(days=6)
+        else:
+            required_end = None
+        if required_end is not None:
+            missing = [
+                start + timedelta(days=offset)
+                for offset in range((required_end - start).days + 1)
+                if start + timedelta(days=offset) not in by_date
+            ]
+            if missing:
+                raise ValueError(
+                    f"{year}: {len(missing)} missing weather days before {required_end}"
+                )
         flags = heatwave_day_flags(
             [row["temp_max_c"] for row in rows],
             gold.heatwave.threshold_c,
@@ -92,8 +114,10 @@ def build_weekly_weather(root: Path, config: Config, force: bool = False) -> dic
             })
         target = weather_path(root, year)
         target.parent.mkdir(parents=True, exist_ok=True)
-        if not force and target.is_file() and pq.ParquetFile(target).metadata.num_rows == len(weeks):
-            summary["years"].append(dict(year=year, rows=len(weeks), skipped=True))
+        if (not force and state.complete and target.is_file()
+                and pq.ParquetFile(target).metadata.num_rows == len(weeks)):
+            summary["years"].append(dict(year=year, rows=len(weeks), skipped=True,
+                                         as_of=state.as_of, complete=state.complete))
             continue
         tmp = target.with_suffix(".parquet.tmp")
         try:
@@ -102,5 +126,6 @@ def build_weekly_weather(root: Path, config: Config, force: bool = False) -> dic
         finally:
             tmp.unlink(missing_ok=True)
         summary["years"].append(dict(year=year, rows=len(weeks), skipped=False,
-                                     heatwave_days=len(hot_days)))
+                                     heatwave_days=len(hot_days),
+                                     as_of=state.as_of, complete=state.complete))
     return summary
