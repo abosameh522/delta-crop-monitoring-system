@@ -45,6 +45,28 @@ Operational notes:
   machine changes mtimes and makes Gold rebuild unless fingerprints are copied
   or adopted (`--adopt`); preserving mtimes avoids the rebuild.
 
+## Adopting an existing lake
+
+Outputs built before fingerprints existed are reported as `unfingerprinted` and
+skipped. `--adopt` writes the sidecars only; it never rewrites a Parquet, and it
+verifies the **current** inputs — it does not prove that legacy outputs were
+originally produced from them.
+
+```bash
+python scripts/gold_regression.py                       # independent check first
+python -m delta_crops.transform.cli --config config/aoi.yaml --data-dir data all --adopt
+python -m delta_crops.gold.cli --config config/aoi.yaml --data-dir data weather --adopt
+python -m delta_crops.gold.cli --config config/aoi.yaml --data-dir data weekly  --adopt
+python -m delta_crops.gold.cli --config config/aoi.yaml --data-dir data anomaly --adopt
+```
+
+Rehearse on a `/tmp` copy first. Gold order is weather → weekly → anomaly, with
+no `--year` and no `--force`, and read the printed counts (Gold exits 0 even when
+`failed > 0`; `--summary-json` is only written by `gold.cli build`). Undo is
+deleting `*.fingerprint.json`. Procedure, measured results (2026-11-11: 293
+Silver and 15 Gold sidecars, outputs byte-identical before/after) and the known
+CLI quirks: `docs/adopting-an-existing-lake.md`.
+
 ## Run with Docker
 
 Two containers: a real Prefect server (owns the scheduler and SQLite state) and

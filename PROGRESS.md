@@ -47,10 +47,23 @@
   executed pre-fix code and reported 9 failures (5 missing repo files, 4 from old code); after the
   rebuild only the 5 repo-file tests failed, which produced the host-only skip policy (`dc171f9`).
   A green container suite proves the package/CLIs in the image, not the compose wiring.
-- **Still open at Phase 6 close:** `--adopt` has not been run on the real Silver/Gold (legacy
-  outputs keep their unproven provenance); the flow has never run on real data — the schedule is a
-  `no_op` until a new year (e.g. 2027) is added to the config; container concurrency unproven;
-  healthcheck is not a heartbeat; uv image tag minor-pinned.
+- **Adopted on the real lake (2026-11-11):** Gold regression before adopting was 15/15 OK, 0 diffs
+  (weekly_ndvi/ndvi_anomaly 4,786,080 rows per year, weekly_weather 20 rows per year, 44.93 s).
+  A `/tmp/adopt_rehearsal` copy was adopted first; the real lake then had 0 sidecars and a
+  1727-line ledger. Silver `all --adopt`: `0 built, 0 skipped, 0 rebuilt (input change),
+  0 unfingerprinted, 293 adopted, 0 failed in 23.3s (peak RSS 183 MB)`, exit 0, sidecars
+  59/59/60/59/56 by year. Gold `weather` → `weekly` → `anomaly`, no `--year`/`--force`: each
+  `errors []`, `built 0`, `skipped 0`, `unfingerprinted 0`, `adopted 5`, `failed 0`; 15 sidecars.
+  A SHA-256 over the sorted list of non-sidecar files was identical before and after for
+  `data/silver` and `data/gold`; ledger still 1727 lines; git clean. The 23.3 s is warm-cache;
+  there is no cold-disk timing. Procedure and scope: `docs/adopting-an-existing-lake.md`.
+- **Open after Phase 6:** real Silver/Gold are adopted, but the **scheduled flow has still never
+  run end-to-end on real data** — the schedule stays a `no_op` until a new year (e.g. 2027) is
+  added to the config; container concurrency unproven; healthcheck is not a heartbeat; `uv` image
+  tag minor-pinned (`ghcr.io/astral-sh/uv:0.9`). Known CLI quirks (not blockers, not fixed):
+  `gold.cli weather` ignores `--year` and **builds** a missing year instead of adopting it;
+  `--summary-json` is written only by `gold.cli build`; Gold exits 0 when `failed > 0`;
+  `--adopt --force` rebuilds; Gold fingerprints follow Silver mtime/size.
 
 - **6a base (accepted):** four tasks calling the real CLI `main()` in-process
   (ingest → Silver → quality → Gold), only exit 3 retried (1/2/4 s), `PipelineError` otherwise,
@@ -59,11 +72,11 @@
   real end-to-end integration test with only network mocked.
 - **Tests now:** default `142 passed, 1 deselected`; quick loop `-m "not flow and not slow"`
   fast (<10 s); slow `-m slow` 1 test. Gold regression 15/15 identical (last run 47.15 s).
-- **Half-done / NOT DONE:** Phase 6b Docker verification (build, `up -d`, health, `docker stats`,
-  in-container imports and suite, then `down`). Phase 7+ not started. Legacy Silver outputs still
-  need explicit adoption.
-- **Next:** user runs the 6b command list and pastes build/ps/logs/stats/test output;
-  then 6b is closed and Phase 7 can start on request. No unverified claim is recorded as fact.
+- **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
+  adopted (2026-11-11), but the scheduled flow has never run end-to-end on real data. Phase 7+
+  not started. Legacy Silver outputs were adopted on 2026-11-11.
+- **Next:** Phase 6 is closed and the real lake is adopted; Phase 7 starts only on
+  approval for Phase 7. No unverified claim is recorded as fact.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -75,7 +88,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
 | 4 | Data quality | DONE | All 293 ledger dates / 70,116,072 rows passed critical checks; 58 tests pass; corruption CLI exit 1; DN audit and D-036 onward documented. |
 | 5 | Gold layer | DONE | Weekly gate passed (max 27.54%), anomaly leave-one-out, heatwave ≥40°C/≥3d, orbit cache + diagnostic. 7 new tests; 65 total pass. |
-| 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Open: `--adopt`, real-data run, container concurrency, heartbeat, uv tag pin. |
+| 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Real Silver/Gold adopted 2026-11-11 (293 + 15 sidecars, outputs byte-identical). Open: scheduled flow never run on real data, container concurrency, heartbeat, uv tag pin. |
 | 7 | Modeling | TODO | Baseline computed from training years only |
 | 8 | Dashboard | TODO | |
 | 9 | Packaging and documentation | TODO | |
