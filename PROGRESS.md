@@ -3,14 +3,14 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Step 5 (per-year Gold `as_of`, `not_yet_observed`, complete-season baselines) implemented and verified; awaiting acceptance. Step 6 NOT started.
-- **Done this session:** Step 5 — `gold/as_of.py` derives each year's cut-off from config + Silver (no wall clock); weekly NDVI and weekly weather honour it; anomaly propagates `not_yet_observed` and admits only complete seasons into baselines. Regression unchanged 15/15.
-- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, Gold per-output fingerprints (Step 6), partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
-- **Tests:** default 103 passed, 1 slow deselected, 3 strict xfailed, 3.12s; slow 1 passed, 106 deselected, 43.47s. 107 total. No unexpected failing tests.
-- **Regression:** final run 43.21s total (build 37.11s); all 15 table/year comparisons identical, zero EXCEPT differences both ways. First run after Step 5a was also 15/15. Snapshot unchanged; outputs only in TemporaryDirectory.
-- **Step 5 behaviour:** complete season (season end present + all 153 weather days) -> `as_of` = config season end; in-progress -> `min(last Silver acquisition date, last weather date, season end)`; week evaluated only when its Sunday <= `as_of`. In-progress outputs rebuild each run; complete-year skips stay. Gold fingerprints (Step 6) will cover as_of changes.
+- **Current step:** Step 6 (Gold input fingerprints, verified skips, `--adopt`) implemented and verified; awaiting acceptance. Step 7 NOT started.
+- **Done this session:** Step 6 — `gold/fingerprint.py`; fingerprints next to every weekly/anomaly/weather partition; skip only on matching fingerprint + valid rows; `unfingerprinted` skips; `--adopt` without touching Parquet; per-table built/skipped/rebuilt_due_to_input_change/unfingerprinted counts. The `test_gold_fingerprint_contains_as_of` xfail is now real.
+- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
+- **Tests:** default 111 passed, 1 slow deselected, 2 strict xfailed, 4.43s; slow 1 passed, 113 deselected, 43.64s. 114 total. No unexpected failing tests.
+- **Regression:** final run 43.16s total (build 37.09s); all 15 table/year comparisons identical, zero EXCEPT differences both ways. First Step 6 run also 15/15 (64.48s under transient load). Snapshot unchanged; outputs and fingerprints only in TemporaryDirectory.
+- **Step 6 behaviour:** weekly fingerprint = Silver partition names/sizes/mtime_ns + weather SHA-256 + as_of + config hash + code version; weather = weather SHA-256 + as_of + config; anomaly = stored weekly fingerprints of its baseline pool **and its current year** (needed because anomaly rows carry the current weekly NDVI) + complete-year list + as_of + config. Silver identity uses metadata, not content hashes, because Silver writes atomically and hashing ~750 MB per build is unnecessary.
 - **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs, no overlap (02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11). PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
-- **Next:** Step 5 acceptance pending. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
+- **Next:** Step 6 acceptance pending. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
