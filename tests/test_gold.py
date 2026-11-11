@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -21,12 +22,18 @@ from delta_crops.gold.as_of import (
     season_state,
     week_is_observed,
 )
+from delta_crops.gold.fingerprint import (
+    fingerprint_path,
+    read_fingerprint,
+    weekly_fingerprint,
+)
 from delta_crops.gold.queries import sample_query
 from delta_crops.gold.weekly import (
     STATUS_CASE,
     build_weekly_ndvi,
     iso_week_start,
     season_weeks,
+    weather_path,
     weekly_path,
 )
 from delta_crops.gold.weather import build_weekly_weather, heatwave_day_flags
@@ -434,3 +441,176 @@ def test_baseline_with_fewer_than_three_complete_years_gives_no_baseline(
     assert row["status"] == "no_baseline"
     assert row["n_baseline_years"] == 2
     assert row["anomaly"] is None
+
+
+# ─── Gold input fingerprints: skip, rebuild consequences, unfingerprinted, adopt ───
+
+
+def _build_all(root: Path, config: Config, **kwargs) -> tuple[dict, dict, dict]:
+    """Build in the production order: weekly, then anomaly, then weather."""
+    return (
+        build_weekly_ndvi(root, config, **kwargs),
+        build_anomaly(root, config, **kwargs),
+        build_weekly_weather(root, config, **kwargs),
+    )
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _rewrite_silver_ndvi(root: Path, year: int, delta: float = 0.05) -> Path:
+    """Change one Silver NDVI partition and force a distinct mtime."""
+    path = sorted((root / "silver" / "ndvi" / f"year={year}").glob("*/date=*.parquet"))[0]
+    table = pq.read_table(path)
+    rows = table.to_pylist()
+    for row in rows:
+        if row["ndvi"] is not None:
+            row["ndvi"] = row["ndvi"] + delta
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+    return path
+
+
+def _change_one_weather_value(root: Path, day: date = date(2022, 7, 1)) -> Path:
+    path = root / "silver" / "weather.parquet"
+    table = pq.read_table(path)
+    rows = table.to_pylist()
+    for row in rows:
+        if row["date"] == day:
+            row["temp_max_c"] = 33.0
+            break
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+    return path
+
+
+def _extend_weather_to(root: Path, year: int, last_day: date) -> None:
+    """Add missing daily weather rows up to ``last_day`` for one year."""
+    path = root / "silver" / "weather.parquet"
+    table = pq.read_table(path)
+    rows = table.to_pylist()
+    present = {row["date"] for row in rows if row["date"].year == year}
+    day = max(present) if present else date(year, 5, 1)
+    while day < last_day:
+        day += timedelta(days=1)
+        if day not in present:
+            rows.append(dict(
+                date=day, temp_max_c=35.0, temp_min_c=25.0,
+                temp_mean_c=30.0, precip_mm=0.0, solar_mj_m2=25.0,
+            ))
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+
+
+def test_gold_build_twice_second_run_all_skipped(gold_env: tuple[Path, Config]) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    weekly, anomaly, weather = _build_all(root, config)
+    for summary in (weekly, anomaly, weather):
+        assert summary["built"] == 0
+        assert summary["rebuilt_due_to_input_change"] == 0
+        assert summary["unfingerprinted"] == 0
+        assert summary["skipped"] == len(YEARS)
+    assert fingerprint_path(weekly_path(root, 2023)).is_file()
+    assert fingerprint_path(root / "gold" / "ndvi_anomaly" / "year=2023" / "ndvi_anomaly.parquet").is_file()
+    assert fingerprint_path(weather_path(root, 2023)).is_file()
+
+
+def test_silver_change_rebuilds_one_weekly_and_all_dependent_anomalies(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    _rewrite_silver_ndvi(root, 2022)
+    weekly = build_weekly_ndvi(root, config)
+    assert weekly["rebuilt_due_to_input_change"] == 1
+    assert weekly["built"] == 0
+    assert weekly["skipped"] == len(YEARS) - 1
+    changed = [item for item in weekly["years"] if item["status"] == "rebuilt_due_to_input_change"]
+    assert [item["year"] for item in changed] == [2022]
+
+    anomaly = build_anomaly(root, config)
+    # 2022's own anomaly carries its weekly NDVI, and 2022 is in every other pool.
+    assert anomaly["rebuilt_due_to_input_change"] == len(YEARS)
+    assert anomaly["skipped"] == 0
+
+
+def test_weather_change_rebuilds_weather_and_every_weekly(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    _change_one_weather_value(root)
+    weather = build_weekly_weather(root, config)
+    assert weather["rebuilt_due_to_input_change"] == len(YEARS)
+    assert weather["skipped"] == 0
+    weekly = build_weekly_ndvi(root, config)
+    assert weekly["rebuilt_due_to_input_change"] == len(YEARS)
+    assert weekly["skipped"] == 0
+
+
+def test_missing_fingerprint_is_reported_and_never_rebuilds(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    target = weekly_path(root, 2022)
+    before = _sha256(target)
+    for year in YEARS:
+        fingerprint_path(weekly_path(root, year)).unlink()
+    summary = build_weekly_ndvi(root, config)
+    assert summary["unfingerprinted"] == len(YEARS)
+    assert summary["built"] == summary["skipped"] == summary["rebuilt_due_to_input_change"] == 0
+    assert _sha256(target) == before
+    assert not fingerprint_path(target).exists()
+
+
+def test_adopt_writes_fingerprints_without_touching_parquet(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    targets = [
+        *(weekly_path(root, year) for year in YEARS),
+        *(root / "gold" / "ndvi_anomaly" / f"year={year}" / "ndvi_anomaly.parquet" for year in YEARS),
+        *(weather_path(root, year) for year in YEARS),
+    ]
+    before = {path: _sha256(path) for path in targets}
+    for path in targets:
+        fingerprint_path(path).unlink()
+
+    weekly = build_weekly_ndvi(root, config, adopt=True)
+    weather = build_weekly_weather(root, config, adopt=True)
+    anomaly = build_anomaly(root, config, adopt=True)
+    assert weekly["adopted"] == weather["adopted"] == anomaly["adopted"] == len(YEARS)
+    assert all(_sha256(path) == digest for path, digest in before.items())
+    assert read_fingerprint(fingerprint_path(weekly_path(root, 2022))) == weekly_fingerprint(
+        root, config, 2022
+    )
+
+
+def test_force_rebuilds_even_with_matching_fingerprints(gold_env: tuple[Path, Config]) -> None:
+    root, config = gold_env
+    _build_all(root, config, force=True)
+    weekly = build_weekly_ndvi(root, config, force=True)
+    assert weekly["built"] == len(YEARS)
+    assert weekly["skipped"] == 0
+
+
+def test_in_progress_year_rebuilds_only_when_as_of_changes(
+    gold_env: tuple[Path, Config],
+) -> None:
+    root, config = gold_env
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of)
+    build_weekly_ndvi(root, config, force=True)
+    second = build_weekly_ndvi(root, config)
+    assert second["skipped"] == len(YEARS)
+    assert second["rebuilt_due_to_input_change"] == 0
+
+    _add_ndvi_date(root, 2024, as_of + timedelta(days=2))
+    _extend_weather_to(root, 2024, as_of + timedelta(days=2))
+    third = build_weekly_ndvi(root, config, years=[2024])
+    assert third["rebuilt_due_to_input_change"] == 1
+    assert third["years"][0]["as_of"] == as_of + timedelta(days=2)

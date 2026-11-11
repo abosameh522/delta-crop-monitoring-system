@@ -53,7 +53,7 @@ def cmd_orbits(args: argparse.Namespace, config: Config, root: Path) -> int:
 
 def cmd_weekly(args: argparse.Namespace, config: Config, root: Path) -> int:
     try:
-        summary = weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force)
+        summary = weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force, adopt=args.adopt)
     except TransientFailure:
         raise
     except SilverDateFailure:
@@ -66,7 +66,7 @@ def cmd_weekly(args: argparse.Namespace, config: Config, root: Path) -> int:
 
 def cmd_anomaly(args: argparse.Namespace, config: Config, root: Path) -> int:
     try:
-        summary = anomaly.build_anomaly(root, config, _years(args, config), force=args.force)
+        summary = anomaly.build_anomaly(root, config, _years(args, config), force=args.force, adopt=args.adopt)
     except TransientFailure:
         raise
     except SilverDateFailure:
@@ -79,7 +79,7 @@ def cmd_anomaly(args: argparse.Namespace, config: Config, root: Path) -> int:
 
 def cmd_weather(args: argparse.Namespace, config: Config, root: Path) -> int:
     try:
-        summary = weather.build_weekly_weather(root, config, force=args.force)
+        summary = weather.build_weekly_weather(root, config, force=args.force, adopt=args.adopt)
     except TransientFailure:
         raise
     except SilverDateFailure:
@@ -104,9 +104,9 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
     if not cache.is_file():
         print(f"orbit cache missing, building: {orbits.build_orbit_cache(root, config)}")
     try:
-        print(json.dumps(weather.build_weekly_weather(root, config, force=args.force), indent=2))
-        print(json.dumps(weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force), indent=2))
-        print(json.dumps(anomaly.build_anomaly(root, config, _years(args, config), force=args.force), indent=2))
+        print(json.dumps(weather.build_weekly_weather(root, config, force=args.force, adopt=args.adopt), indent=2))
+        print(json.dumps(weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force, adopt=args.adopt), indent=2))
+        print(json.dumps(anomaly.build_anomaly(root, config, _years(args, config), force=args.force, adopt=args.adopt), indent=2))
     except TransientFailure:
         raise
     except SilverDateFailure:
@@ -181,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         command = sub.add_parser(name)
         command.add_argument("--year", type=int, default=None)
         command.add_argument("--force", action="store_true")
+        command.add_argument("--adopt", action="store_true")
         if name == "orbits":
             command.add_argument("--refresh", action="store_true")
             command.add_argument("--diagnose", action="store_true")

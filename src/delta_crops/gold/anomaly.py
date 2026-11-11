@@ -19,7 +19,15 @@ import pyarrow.parquet as pq
 
 from delta_crops.config import Config, require_gold
 from delta_crops.gold.as_of import complete_years
-from delta_crops.gold.weekly import anomaly_path, weekly_path
+from delta_crops.gold.fingerprint import (
+    anomaly_fingerprint,
+    fingerprint_path,
+    fingerprints_match,
+    read_fingerprint,
+    verify_anomaly_inputs,
+    write_fingerprint,
+)
+from delta_crops.gold.weekly import anomaly_path
 
 ANOMALY_SCHEMA = pa.schema(
     [
@@ -41,17 +49,22 @@ def build_anomaly(
     config: Config,
     years: list[int] | None = None,
     force: bool = False,
+    adopt: bool = False,
 ) -> dict:
-    """Write `gold/ndvi_anomaly/year=Y/` for each year from all weekly years."""
+    """Write `gold/ndvi_anomaly/year=Y/` and its fingerprint; skip verified output."""
     gold = require_gold(config)
     years = list(years or config.seasons.years)
-    complete = set(complete_years(root, config, config.seasons.years))
+    complete = tuple(sorted(complete_years(root, config, config.seasons.years)))
     if complete:
-        baseline_filter = "AND yr IN (" + ", ".join(str(y) for y in sorted(complete)) + ")"
+        baseline_filter = "AND yr IN (" + ", ".join(str(y) for y in complete) + ")"
     else:
         baseline_filter = "AND FALSE"
     glob = str(root / "gold" / "weekly_ndvi" / "year=*" / "*.parquet")
-    summary: dict = {"years": [], "seconds": 0.0}
+    summary: dict = {
+        "table": "ndvi_anomaly", "years": [], "errors": [],
+        "built": 0, "skipped": 0, "rebuilt_due_to_input_change": 0,
+        "unfingerprinted": 0, "adopted": 0, "failed": 0, "seconds": 0.0,
+    }
     started = time.perf_counter()
     con = duckdb.connect()
     con.execute("SET threads = ?", [gold.duckdb_threads]).fetchall()
@@ -66,11 +79,40 @@ def build_anomaly(
             cur_rows = con.execute("SELECT count(*) FROM all_weeks WHERE yr = ?", [year]).fetchall()[0][0]
             if not cur_rows:
                 raise ValueError(f"no weekly_ndvi rows for {year}; build weekly_ndvi first")
-            if (not force and year in complete and target.is_file()
-                    and pq.ParquetFile(target).metadata.num_rows == cur_rows):
-                summary["years"].append(dict(year=year, rows=cur_rows, skipped=True,
-                                             complete=year in complete))
-                continue
+            stored = read_fingerprint(fingerprint_path(target))
+            build_reason = None
+            if not force and target.is_file():
+                if stored is None and not adopt:
+                    summary["unfingerprinted"] += 1
+                    print(f"{year} anomaly skip (unfingerprinted)", flush=True)
+                    summary["years"].append(dict(year=year, rows=cur_rows, status="unfingerprinted",
+                                                 skipped=True, complete=year in complete))
+                    continue
+                if stored is None and adopt:
+                    problem = verify_anomaly_inputs(root, year, complete)
+                    if problem:
+                        summary["failed"] += 1
+                        summary["errors"].append(problem)
+                        summary["years"].append(dict(year=year, rows=0, status="failed",
+                                                     skipped=True, complete=year in complete))
+                        continue
+                    write_fingerprint(
+                        fingerprint_path(target), anomaly_fingerprint(root, config, year, complete)
+                    )
+                    summary["adopted"] += 1
+                    print(f"{year} anomaly adopt (verified inputs)", flush=True)
+                    summary["years"].append(dict(year=year, rows=cur_rows, status="adopted",
+                                                 skipped=True, complete=year in complete))
+                    continue
+                current = anomaly_fingerprint(root, config, year, complete)
+                valid = pq.ParquetFile(target).metadata.num_rows == cur_rows
+                if fingerprints_match(stored, current) and valid:
+                    summary["skipped"] += 1
+                    summary["years"].append(dict(year=year, rows=cur_rows, status="skipped",
+                                                 skipped=True, complete=year in complete))
+                    continue
+                build_reason = ("input changed" if not fingerprints_match(stored, current)
+                                else "invalid output")
             target.parent.mkdir(parents=True, exist_ok=True)
             tmp = target.with_suffix(".parquet.tmp")
             try:
@@ -107,8 +149,17 @@ def build_anomaly(
                 os.replace(tmp, target)
             finally:
                 tmp.unlink(missing_ok=True)
+            write_fingerprint(
+                fingerprint_path(target), anomaly_fingerprint(root, config, year, complete)
+            )
+            if build_reason == "input changed":
+                summary["rebuilt_due_to_input_change"] += 1
+                status = "rebuilt_due_to_input_change"
+            else:
+                summary["built"] += 1
+                status = "built"
             summary["years"].append(dict(year=year, rows=cur_rows, skipped=False,
-                                         complete=year in complete))
+                                         status=status, complete=year in complete))
     finally:
         con.close()
     summary["seconds"] = round(time.perf_counter() - started, 2)

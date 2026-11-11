@@ -18,6 +18,14 @@ import pyarrow.parquet as pq
 
 from delta_crops.config import Config, require_gold
 from delta_crops.gold.as_of import season_states
+from delta_crops.gold.fingerprint import (
+    fingerprint_path,
+    fingerprints_match,
+    read_fingerprint,
+    verify_weather_inputs,
+    weather_fingerprint,
+    write_fingerprint,
+)
 from delta_crops.gold.weekly import season_weeks, weather_path
 
 WEEKLY_WEATHER_SCHEMA = pa.schema(
@@ -56,15 +64,19 @@ def heatwave_day_flags(
     return flags
 
 
-def build_weekly_weather(root: Path, config: Config, force: bool = False) -> dict:
-    """Write `gold/weekly_weather/year=Y/` from the Silver daily weather table."""
+def build_weekly_weather(root: Path, config: Config, force: bool = False, adopt: bool = False) -> dict:
+    """Write `gold/weekly_weather/year=Y/` and its fingerprint; skip verified output."""
     gold = require_gold(config)
     source = root / "silver" / "weather.parquet"
     table = pq.read_table(source, columns=["date", "temp_max_c", "temp_min_c", "precip_mm", "solar_mj_m2"])
     daily: dict[int, list[dict]] = {}
     for row in table.to_pylist():
         daily.setdefault(row["date"].year, []).append(row)
-    summary: dict = {"years": []}
+    summary: dict = {
+        "table": "weekly_weather", "years": [], "errors": [],
+        "built": 0, "skipped": 0, "rebuilt_due_to_input_change": 0,
+        "unfingerprinted": 0, "adopted": 0, "failed": 0,
+    }
     states = season_states(root, config, config.seasons.years)
     for year in config.seasons.years:
         state = states[year]
@@ -114,18 +126,53 @@ def build_weekly_weather(root: Path, config: Config, force: bool = False) -> dic
             })
         target = weather_path(root, year)
         target.parent.mkdir(parents=True, exist_ok=True)
-        if (not force and state.complete and target.is_file()
-                and pq.ParquetFile(target).metadata.num_rows == len(weeks)):
-            summary["years"].append(dict(year=year, rows=len(weeks), skipped=True,
-                                         as_of=state.as_of, complete=state.complete))
-            continue
+        stored = read_fingerprint(fingerprint_path(target))
+        build_reason = None
+        if not force and target.is_file():
+            if stored is None and not adopt:
+                summary["unfingerprinted"] += 1
+                print(f"{year} weather skip (unfingerprinted)", flush=True)
+                summary["years"].append(dict(year=year, rows=len(weeks), status="unfingerprinted",
+                                             skipped=True, as_of=state.as_of, complete=state.complete))
+                continue
+            if stored is None and adopt:
+                problem = verify_weather_inputs(root, config, year)
+                if problem:
+                    summary["failed"] += 1
+                    summary["errors"].append(problem)
+                    summary["years"].append(dict(year=year, rows=0, status="failed",
+                                                 skipped=True, as_of=state.as_of,
+                                                 complete=state.complete))
+                    continue
+                write_fingerprint(fingerprint_path(target), weather_fingerprint(root, config, year))
+                summary["adopted"] += 1
+                print(f"{year} weather adopt (verified inputs)", flush=True)
+                summary["years"].append(dict(year=year, rows=len(weeks), status="adopted",
+                                             skipped=True, as_of=state.as_of, complete=state.complete))
+                continue
+            current = weather_fingerprint(root, config, year)
+            valid = pq.ParquetFile(target).metadata.num_rows == len(weeks)
+            if fingerprints_match(stored, current) and valid:
+                summary["skipped"] += 1
+                summary["years"].append(dict(year=year, rows=len(weeks), status="skipped",
+                                             skipped=True, as_of=state.as_of, complete=state.complete))
+                continue
+            build_reason = ("input changed" if not fingerprints_match(stored, current)
+                            else "invalid output")
         tmp = target.with_suffix(".parquet.tmp")
         try:
             pq.write_table(pa.Table.from_pylist(output, schema=WEEKLY_WEATHER_SCHEMA), tmp, compression="zstd")
             os.replace(tmp, target)
         finally:
             tmp.unlink(missing_ok=True)
+        write_fingerprint(fingerprint_path(target), weather_fingerprint(root, config, year))
+        if build_reason == "input changed":
+            summary["rebuilt_due_to_input_change"] += 1
+            status = "rebuilt_due_to_input_change"
+        else:
+            summary["built"] += 1
+            status = "built"
         summary["years"].append(dict(year=year, rows=len(weeks), skipped=False,
-                                     heatwave_days=len(hot_days),
+                                     heatwave_days=len(hot_days), status=status,
                                      as_of=state.as_of, complete=state.complete))
     return summary

@@ -18,6 +18,15 @@ import pyarrow.parquet as pq
 
 from delta_crops.config import Config, Gold, require_gold
 from delta_crops.gold.as_of import season_states
+from delta_crops.gold.fingerprint import (
+    fingerprint_path,
+    fingerprints_match,
+    output_path,
+    read_fingerprint,
+    verify_weekly_inputs,
+    weekly_fingerprint,
+    write_fingerprint,
+)
 
 WEEKLY_SCHEMA = pa.schema(
     [
@@ -62,15 +71,15 @@ def season_weeks(year: int, first: int, last: int) -> list[date]:
 
 
 def weekly_path(root: Path, year: int) -> Path:
-    return root / "gold" / "weekly_ndvi" / f"year={year}" / "weekly_ndvi.parquet"
+    return output_path(root, "weekly_ndvi", year)
 
 
 def anomaly_path(root: Path, year: int) -> Path:
-    return root / "gold" / "ndvi_anomaly" / f"year={year}" / "ndvi_anomaly.parquet"
+    return output_path(root, "ndvi_anomaly", year)
 
 
 def weather_path(root: Path, year: int) -> Path:
-    return root / "gold" / "weekly_weather" / f"year={year}" / "weekly_weather.parquet"
+    return output_path(root, "weekly_weather", year)
 
 
 def _connect(gold: Gold) -> duckdb.DuckDBPyConnection:
@@ -108,15 +117,20 @@ def build_weekly_ndvi(
     config: Config,
     years: list[int] | None = None,
     force: bool = False,
+    adopt: bool = False,
 ) -> dict:
-    """Write `gold/weekly_ndvi/year=Y/` for each year; skip valid existing output."""
+    """Write `gold/weekly_ndvi/year=Y/` and its fingerprint; skip verified output."""
     gold = require_gold(config)
     years = list(years or config.seasons.years)
     cells = pq.read_table(root / "silver" / "cells.parquet", columns=["cell_id"])
     kept = len(cells)
     if not kept:
         raise ValueError("silver/cells.parquet is empty")
-    summary: dict = {"years": [], "seconds": 0.0}
+    summary: dict = {
+        "table": "weekly_ndvi", "years": [], "errors": [],
+        "built": 0, "skipped": 0, "rebuilt_due_to_input_change": 0,
+        "unfingerprinted": 0, "adopted": 0, "failed": 0, "seconds": 0.0,
+    }
     started = time.perf_counter()
     con = _connect(gold)
     try:
@@ -129,11 +143,46 @@ def build_weekly_ndvi(
             con.register("weeks", pa.table({"week_start": pa.array(weeks, pa.date32())}))
             target = weekly_path(root, year)
             expected = kept * len(weeks)
-            if (not force and state.complete and target.is_file()
-                    and pq.ParquetFile(target).metadata.num_rows == expected):
-                summary["years"].append(dict(year=year, rows=expected, skipped=True,
-                                             as_of=state.as_of, complete=state.complete))
-                continue
+            stored = read_fingerprint(fingerprint_path(target))
+            build_reason = None
+            if not force and target.is_file():
+                if stored is None and not adopt:
+                    summary["unfingerprinted"] += 1
+                    print(f"{year} weekly skip (unfingerprinted)", flush=True)
+                    summary["years"].append(dict(
+                        year=year, rows=expected, status="unfingerprinted", skipped=True,
+                        as_of=state.as_of, complete=state.complete))
+                    continue
+                if stored is None and adopt:
+                    problem = verify_weekly_inputs(root, year)
+                    if problem:
+                        summary["failed"] += 1
+                        summary["errors"].append(problem)
+                        summary["years"].append(dict(
+                            year=year, rows=0, status="failed", skipped=True,
+                            as_of=state.as_of, complete=state.complete))
+                        continue
+                    write_fingerprint(
+                        fingerprint_path(target), weekly_fingerprint(root, config, year)
+                    )
+                    summary["adopted"] += 1
+                    print(f"{year} weekly adopt (verified inputs)", flush=True)
+                    summary["years"].append(dict(
+                        year=year, rows=expected, status="adopted", skipped=True,
+                        as_of=state.as_of, complete=state.complete))
+                    continue
+                current = weekly_fingerprint(root, config, year)
+                valid = pq.ParquetFile(target).metadata.num_rows == expected
+                if fingerprints_match(stored, current) and valid:
+                    summary["skipped"] += 1
+                    summary["years"].append(dict(
+                        year=year, rows=expected, status="skipped", skipped=True,
+                        as_of=state.as_of, complete=state.complete))
+                    continue
+                build_reason = (
+                    "input changed" if not fingerprints_match(stored, current)
+                    else "invalid output"
+                )
             target.parent.mkdir(parents=True, exist_ok=True)
             glob = str(root / "silver" / "ndvi" / f"year={year}" / "**" / "*.parquet")
             started_year = time.perf_counter()
@@ -194,9 +243,16 @@ def build_weekly_ndvi(
                 os.replace(tmp, target)
             finally:
                 tmp.unlink(missing_ok=True)
+            write_fingerprint(fingerprint_path(target), weekly_fingerprint(root, config, year))
+            if build_reason == "input changed":
+                summary["rebuilt_due_to_input_change"] += 1
+                status = "rebuilt_due_to_input_change"
+            else:
+                summary["built"] += 1
+                status = "built"
             summary["years"].append(dict(year=year, rows=expected,
                 seconds=round(time.perf_counter() - started_year, 2), skipped=False,
-                as_of=state.as_of, complete=state.complete))
+                status=status, as_of=state.as_of, complete=state.complete))
     finally:
         con.close()
     summary["seconds"] = round(time.perf_counter() - started, 2)

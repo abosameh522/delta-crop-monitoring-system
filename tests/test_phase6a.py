@@ -5,7 +5,7 @@ from hashlib import sha256
 import time
 from copy import deepcopy
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import duckdb
@@ -337,11 +337,26 @@ def test_silver_fingerprint_changes_when_selected_asset_changes(tmp_path, monkey
     assert not fingerprints_match(fp1_bad_version, fp1)
 
 
-@pytest.mark.xfail(reason="step 6: Gold fingerprint with as_of not implemented", strict=True)
-def test_gold_fingerprint_contains_as_of():
-    from delta_crops.gold.weekly import weekly_fingerprint
+def test_gold_fingerprint_contains_as_of(tmp_path):
+    from delta_crops.gold.fingerprint import weekly_fingerprint
 
-    assert "as_of" in weekly_fingerprint(as_of=date(2023, 9, 30))
+    root = tmp_path
+    (root / "silver" / "ndvi" / "year=2023" / "month=05").mkdir(parents=True)
+    start = date(2023, 5, 1)
+    weather = pa.table({
+        "date": pa.array([start + timedelta(days=offset) for offset in range(153)], pa.date32()),
+    })
+    pq.write_table(weather, root / "silver" / "weather.parquet")
+    empty = pa.table({"cell_id": pa.array([], pa.int32())})
+    pq.write_table(
+        empty,
+        root / "silver" / "ndvi" / "year=2023" / "month=05" / "date=2023-05-08.parquet",
+    )
+
+    fingerprint = weekly_fingerprint(root, CONFIG, 2023)
+    assert fingerprint["as_of"] == "2023-09-30"
+    assert {"version", "as_of", "config_hash", "weather_sha256", "silver_files"} <= set(fingerprint)
+    assert fingerprint["silver_files"][0]["path"].endswith("date=2023-05-08.parquet")
 
 
 @pytest.mark.xfail(reason="step 8: retry mapping not implemented", strict=True)
