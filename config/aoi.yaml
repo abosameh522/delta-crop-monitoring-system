@@ -35,6 +35,14 @@ quality:
   min_weekly_observations: 2
   max_weekly_masked_pct: 50
 
+#: Bronze asset retry policy (Phase 6a step 7). Only rasterio RasterioIOError is
+#: retried, 3 attempts per asset with exponential backoff. The task may retry a
+#: whole run 3 times, so one asset can be attempted at most 3 x 3 = 9 times.
+#: AssetFailure (exit 4) is not retried by the task.
+ingestion:
+  asset_attempts: 3
+  retry_base_delay_s: 1.0
+
 #: Bronze -> Silver rules (Phase 3). Values here are the ones the code reads;
 #: PROJECT.md documents why each was chosen.
 silver:

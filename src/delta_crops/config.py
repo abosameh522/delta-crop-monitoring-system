@@ -78,6 +78,14 @@ class Silver:
 
 
 @dataclass(frozen=True)
+class Ingestion:
+    """Asset download retry policy (Phase 6a step 7)."""
+
+    asset_attempts: int = 3
+    retry_base_delay_s: float = 1.0
+
+
+@dataclass(frozen=True)
 class Heatwave:
     threshold_c: float
     min_consecutive_days: int
@@ -111,6 +119,7 @@ class Config:
     silver: Silver
     data_quality: dict[str, Any] | None = None
     gold: Gold | None = None
+    ingestion: Ingestion = Ingestion()
 
 
 def config_path(path: str | Path | None = None) -> Path:
@@ -163,6 +172,17 @@ def load_config(path: str | Path | None = None) -> Config:
             stable_target=raw["silver"].get("stable_target"),
         ),
         gold=_load_gold(raw.get("gold")),
+        ingestion=_load_ingestion(raw.get("ingestion")),
+    )
+
+
+def _load_ingestion(raw: dict[str, Any] | None) -> Ingestion:
+    """Parse the optional retry block; defaults are the documented policy."""
+    if raw is None:
+        return Ingestion()
+    return Ingestion(
+        asset_attempts=int(raw.get("asset_attempts", 3)),
+        retry_base_delay_s=float(raw.get("retry_base_delay_s", 1.0)),
     )
 
 

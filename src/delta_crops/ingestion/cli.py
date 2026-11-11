@@ -60,6 +60,8 @@ def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
             data_root=root,
             verify_checksum=not args.no_checksum,
             workers=args.workers,
+            attempts=args.asset_retries,
+            retry_base_delay_s=args.retry_delay,
         )
     except AssetFailure as exc:
         print(f"Ingestion asset failure: {exc}")
@@ -174,6 +176,10 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--end", type=str)
     ingest.add_argument("--no-checksum", action="store_true", help="skip SHA-256 on existing files")
     ingest.add_argument("--workers", type=int, default=4, help="parallel asset downloads")
+    ingest.add_argument("--asset-retries", type=int, default=None,
+                        help="attempts per asset (default: config ingestion.asset_attempts)")
+    ingest.add_argument("--retry-delay", type=float, default=None,
+                        help="retry backoff base in seconds (default: config value)")
     ingest.set_defaults(func=cmd_ingest)
 
     weather_cmd = sub.add_parser("weather", help="fetch Open-Meteo daily data (no imagery)")

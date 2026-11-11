@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from rasterio.errors import RasterioIOError
 
 from delta_crops.config import BBox, Config
 from delta_crops.ingestion import weather
@@ -162,6 +163,10 @@ def _record_for_asset(
     }
 
 
+class _AssetDownloadError(RuntimeError):
+    """One asset failed after its own retries; recorded and skipped."""
+
+
 def ingest_scenes(
     scenes: Iterable[Scene],
     bbox: BBox,
@@ -169,16 +174,31 @@ def ingest_scenes(
     data_root: Path,
     verify_checksum: bool = True,
     workers: int = 4,
-) -> dict[str, int]:
-    """Download missing AOI windows for the given scenes. Safe to re-run."""
+    attempts: int | None = None,
+    retry_base_delay_s: float | None = None,
+) -> dict[str, Any]:
+    """Download missing AOI windows for the given scenes. Safe to re-run.
+
+    Only ``rasterio.errors.RasterioIOError`` is retried, ``attempts`` times per
+    asset with exponential backoff (base delay configurable, zero in tests).
+    Every other exception is an asset failure and is not retried; remaining
+    assets still finish before ``AssetFailure`` (exit 4) is raised.
+    """
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from delta_crops.errors import AssetFailure, TransientFailure
+    from delta_crops.errors import AssetFailure
+
+    policy = config.ingestion
+    attempts = int(policy.asset_attempts if attempts is None else attempts)
+    if attempts < 1:
+        raise ValueError("attempts must be >= 1")
+    base_delay = float(policy.retry_base_delay_s if retry_base_delay_s is None
+                       else retry_base_delay_s)
 
     path = log_path(data_root)
     index = latest_records(read_records(path))
-    stats = {"downloaded": 0, "skipped": 0, "failed": 0, "failed_assets": []}
+    stats: dict[str, Any] = {"downloaded": 0, "skipped": 0, "failed": 0, "failed_assets": []}
     lock = threading.Lock()
 
     pending: list[tuple[Scene, str]] = []
@@ -192,22 +212,37 @@ def ingest_scenes(
                 continue
             pending.append((scene, band))
 
+    def read_with_retry(href: str, asset_key: str):
+        last: RasterioIOError | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return read_window(href, bbox)
+            except RasterioIOError as exc:
+                last = exc
+                if attempt >= attempts:
+                    break
+                delay = base_delay * (2 ** (attempt - 1))
+                if delay > 0:
+                    time.sleep(delay)
+        raise _AssetDownloadError(
+            f"{asset_key}: RasterioIOError after {attempts} attempt(s): {last}"
+        )
+
     def download(scene: Scene, band: str) -> None:
         asset_key = f"{scene.item_id}:{band}"
         target = _bronze_raster_path(data_root, scene, band)
         started = time.monotonic()
-        try:
-            array, transform, crs, nodata = read_window(scene.hrefs[band], bbox)
-        except Exception as exc:  # noqa: BLE001 - network/STAC read errors are transient
-            raise TransientFailure(f"read_window failed for {asset_key}") from exc
+        array, transform, crs, nodata = read_with_retry(scene.hrefs[band], asset_key)
         tmp_path = target.with_suffix(target.suffix + ".tmp")
         try:
             write_cog(target, array, transform, crs, nodata)
-        except Exception as exc:  # noqa: BLE001 - write errors are transient
+        except Exception as exc:  # noqa: BLE001 - any asset-scoped write error
             # write_cog is atomic, but a mocked or interrupted writer must not
             # leave target.tif.tmp behind either.
             tmp_path.unlink(missing_ok=True)
-            raise TransientFailure(f"write_cog failed for {asset_key}") from exc
+            raise _AssetDownloadError(
+                f"{asset_key}: write_cog failed: {type(exc).__name__}: {exc}"
+            ) from exc
         # The ledger record is derived from the final file only: the size and
         # SHA-256 are computed after os.replace has made the output visible.
         record = _record_for_asset(
@@ -232,21 +267,26 @@ def ingest_scenes(
         futures = {pool.submit(download, scene, band): (scene, band) for scene, band in pending}
         for future in as_completed(futures):
             scene, band = futures[future]
+            asset_key = f"{scene.item_id}:{band}"
             try:
                 future.result()
-            except TransientFailure:
+            except _AssetDownloadError as exc:
                 with lock:
                     stats["failed"] += 1
-                    stats["failed_assets"].append(f"{scene.item_id}:{band}")
-                raise
-            except Exception as exc:  # noqa: BLE001 - unexpected
+                    stats["failed_assets"].append({"asset_key": asset_key, "error": str(exc)})
+            except Exception as exc:  # noqa: BLE001 - asset-scoped and non-retryable
                 with lock:
                     stats["failed"] += 1
-                    stats["failed_assets"].append(f"{scene.item_id}:{band}")
-                raise TransientFailure(f"Unexpected error for {scene.item_id}:{band}") from exc
+                    stats["failed_assets"].append(
+                        {"asset_key": asset_key, "error": f"{type(exc).__name__}: {exc}"}
+                    )
 
     if stats["failed"] > 0:
-        raise AssetFailure(f"{stats['failed']} asset(s) failed: {', '.join(stats['failed_assets'])}")
+        print(f"Failed assets ({stats['failed']}):")
+        for item in stats["failed_assets"]:
+            print(f"  {item['asset_key']}: {item['error']}")
+        keys = ", ".join(item["asset_key"] for item in stats["failed_assets"])
+        raise AssetFailure(f"{stats['failed']} asset(s) failed: {keys}")
     return stats
 
 

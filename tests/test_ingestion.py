@@ -240,3 +240,102 @@ def _days(start: date, end: date):
     while day <= end:
         yield day
         day = day.fromordinal(day.toordinal() + 1)
+
+
+# ─── Phase 6a step 7: official RasterioIOError retry, no broad wrapping ───
+
+import numpy as np
+import rasterio
+from rasterio.errors import CRSError, RasterioIOError
+
+from delta_crops.config import load_config
+from delta_crops.errors import AssetFailure
+from delta_crops.ingestion.earth_search import Scene
+
+CONFIG = load_config()
+
+
+def make_scene(item_id: str = "S2A_36RTV_20230501_0_L2A") -> Scene:
+    return Scene(
+        item_id=item_id,
+        tile="36RTV",
+        acquired=datetime(2023, 5, 1, 8, 51, tzinfo=__import__("datetime").timezone.utc),
+        baseline=(5, 0),
+        cloud_cover=1.0,
+        hrefs={
+            "B04": f"https://example.test/{item_id}/B04.tif",
+            "B08": f"https://example.test/{item_id}/B08.tif",
+            "SCL": f"https://example.test/{item_id}/SCL.tif",
+        },
+    )
+
+
+def fake_window(href, bbox):
+    return np.ones((2, 2), dtype="uint16"), rasterio.Affine.identity(), "EPSG:32636", 0
+
+
+def fake_write(path, array, transform, crs, nodata):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x" * 32)
+
+
+def test_rasterio_io_error_twice_then_success_ingests_one_asset(tmp_path, monkeypatch):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red"})
+    scene = make_scene()
+    calls: list[str] = []
+
+    def flaky(href, bbox):
+        calls.append(href)
+        if len(calls) < 3:
+            raise RasterioIOError("temporary read failure")
+        return fake_window(href, bbox)
+
+    monkeypatch.setattr(bronze, "read_window", flaky)
+    monkeypatch.setattr(bronze, "write_cog", fake_write)
+    stats = bronze.ingest_scenes(
+        [scene], CONFIG.bbox, CONFIG, tmp_path, workers=1, retry_base_delay_s=0.0
+    )
+
+    assert stats["downloaded"] == 1 and stats["failed"] == 0
+    assert len(calls) == 3
+    assert len(bronze.read_records(bronze.log_path(tmp_path))) == 1
+    assert bronze._bronze_raster_path(tmp_path, scene, "B04").is_file()
+
+
+def test_rasterio_io_error_exhausts_three_attempts_and_reports(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red"})
+    scene = make_scene()
+    calls: list[str] = []
+
+    def always_fails(href, bbox):
+        calls.append(href)
+        raise RasterioIOError("connection reset")
+
+    monkeypatch.setattr(bronze, "read_window", always_fails)
+    with pytest.raises(AssetFailure):
+        bronze.ingest_scenes(
+            [scene], CONFIG.bbox, CONFIG, tmp_path, workers=1, retry_base_delay_s=0.0
+        )
+
+    assert len(calls) == 3
+    assert not bronze._bronze_raster_path(tmp_path, scene, "B04").exists()
+    assert not list(tmp_path.rglob("*.tmp"))
+    assert bronze.read_records(bronze.log_path(tmp_path)) == []
+    output = capsys.readouterr().out
+    assert scene.item_id in output and "RasterioIOError" in output
+
+
+def test_crse_error_is_not_retried(tmp_path, monkeypatch):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red"})
+    calls: list[str] = []
+
+    def bad_crs(href, bbox):
+        calls.append(href)
+        raise CRSError("invalid CRS")
+
+    monkeypatch.setattr(bronze, "read_window", bad_crs)
+    with pytest.raises(AssetFailure):
+        bronze.ingest_scenes(
+            [make_scene()], CONFIG.bbox, CONFIG, tmp_path, workers=1, retry_base_delay_s=0.0
+        )
+    assert len(calls) == 1
