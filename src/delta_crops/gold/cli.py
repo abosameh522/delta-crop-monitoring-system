@@ -78,7 +78,7 @@ def cmd_weekly(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 4
     except Exception as exc:  # noqa: BLE001
         return to_exit_code(exc)
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2, default=str))
     return 0
 
 
@@ -91,7 +91,7 @@ def cmd_anomaly(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 4
     except Exception as exc:  # noqa: BLE001
         return to_exit_code(exc)
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2, default=str))
     return 0
 
 
@@ -104,7 +104,7 @@ def cmd_weather(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 4
     except Exception as exc:  # noqa: BLE001
         return to_exit_code(exc)
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2, default=str))
     return 0
 
 
@@ -128,23 +128,25 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
             print(f"orbit cache missing, building: {orbits.build_orbit_cache(root, config)}")
         try:
             weather_summary = weather.build_weekly_weather(root, config, force=args.force, adopt=args.adopt)
-            print(json.dumps(weather_summary, indent=2))
+            print(json.dumps(weather_summary, indent=2, default=str))
             weekly_summary = weekly.build_weekly_ndvi(
                 root, config, _years(args, config), force=args.force, adopt=args.adopt
             )
-            print(json.dumps(weekly_summary, indent=2))
+            print(json.dumps(weekly_summary, indent=2, default=str))
             anomaly_summary = anomaly.build_anomaly(
                 root, config, _years(args, config), force=args.force, adopt=args.adopt
             )
-            print(json.dumps(anomaly_summary, indent=2))
+            print(json.dumps(anomaly_summary, indent=2, default=str))
         except TransientFailure:
             summary["status"] = "failed"
             raise
-        except SilverDateFailure:
+        except SilverDateFailure as exc:
             summary["status"] = "failed"
+            summary["error"] = f"SilverDateFailure: {exc}"
             return 4
         except Exception as exc:  # noqa: BLE001
             summary["status"] = "failed"
+            summary["error"] = f"{type(exc).__name__}: {exc}"
             return to_exit_code(exc)
         summary["tables"] = {
             "weekly_weather": _table_counts(weather_summary),
