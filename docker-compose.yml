@@ -1,29 +1,72 @@
-# Local orchestration: one container serves one five-day Prefect deployment.
-# `flow.serve` starts the ephemeral Prefect API in-process (SQLite in
-# PREFECT_HOME), so there is no separate server or worker container.
+# Local orchestration: a Prefect server plus one runner serving one deployment.
+#
+# A served deployment needs the server's scheduler: on an ephemeral API Prefect
+# skips the scheduler service (perpetual_services registers it without
+# run_in_ephemeral), so interval schedules never fire. The server therefore runs
+# as its own process on a fixed port, and the runner points at it.
 name: delta-crops
 
+x-image: &image
+  context: .
+  target: runtime
+  args:
+    # Literal defaults. Never derive these from the shell: after `newgrp docker`
+    # `id -g` reports a different primary gid and the build user stops matching
+    # the owner of data/.
+    UID: "${HOST_UID:-1000}"
+    GID: "${HOST_GID:-1000}"
+
 services:
-  orchestrator:
-    build:
-      context: .
-      target: runtime
-      args:
-        UID: "${HOST_UID:-1000}"
-        GID: "${HOST_GID:-1000}"
+  server:
+    build: *image
     image: delta-crops:6b
     init: true
     restart: unless-stopped
-    command: ["python", "-m", "delta_crops.orchestration.serve"]
     stop_grace_period: 30s
+    command:
+      - prefect
+      - server
+      - start
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4200"
+      - --no-ui
+    environment:
+      PREFECT_HOME: /var/lib/prefect
+      PREFECT_API_URL: http://127.0.0.1:4200/api
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_SERVER_SERVICES_SCHEDULER_ENABLED: "true"
+    volumes:
+      # Durable Prefect state (SQLite, schedules, run history). Never inside data/.
+      - ./.prefect:/var/lib/prefect
+    healthcheck:
+      test: ["CMD", "python", "-m", "delta_crops.orchestration.healthcheck",
+             "--api-url", "http://127.0.0.1:4200/api", "--home", "/var/lib/prefect"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  orchestrator:
+    build: *image
+    image: delta-crops:6b
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    command: ["python", "-m", "delta_crops.orchestration.serve"]
+    depends_on:
+      server:
+        condition: service_healthy
     environment:
       # data_dir() / config_path() read these when no CLI flag is given.
       DELTA_CROPS_DATA_DIR: /app/data
       DELTA_CROPS_CONFIG: /app/config/aoi.yaml
-      # Prefect state lives outside data/, in its own bind mount.
-      PREFECT_HOME: /var/lib/prefect
-      PREFECT_API_URL: http://127.0.0.1:4200/api
-      PYTHONUNBUFFERED: "1"
+      # The API is the `server` service, not an ephemeral server in this process.
+      PREFECT_API_URL: http://server:4200/api
+      # Client-side scratch only: durable Prefect state lives on the server.
+      PREFECT_HOME: /tmp/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
     env_file:
       # Optional: only needed if Copernicus Data Space credentials are added
       # later. Earth Search and Open-Meteo need no credentials.
@@ -32,9 +75,10 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
-      - ./.prefect:/var/lib/prefect
     healthcheck:
-      test: ["CMD", "python", "-m", "delta_crops.orchestration.healthcheck"]
+      test: ["CMD", "python", "-m", "delta_crops.orchestration.healthcheck",
+             "--api-url", "http://server:4200/api",
+             "--deployment", "delta-crops-phase6a/delta-crops-scheduled"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -57,12 +101,12 @@ services:
     environment:
       DELTA_CROPS_DATA_DIR: /app/data
       DELTA_CROPS_CONFIG: /app/config/aoi.yaml
-      PREFECT_HOME: /var/lib/prefect
+      # No PREFECT_API_URL: the tests start their own in-process harness server.
+      PREFECT_HOME: /tmp/prefect-test
       PYTHONUNBUFFERED: "1"
     volumes:
       # Read-only on purpose: a test that writes the real lake must fail.
       - ./data:/app/data:ro
       - ./config:/app/config:ro
-      - ./.prefect-test:/var/lib/prefect
       - ./tests:/app/tests:ro
     command: ["pytest", "-q", "-m", "not slow and not flow"]
