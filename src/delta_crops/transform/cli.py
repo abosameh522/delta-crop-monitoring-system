@@ -88,6 +88,7 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
             grid=grid,
             verify_checksum=not args.no_verify_checksum,
             force=args.force,
+            adopt=args.adopt,
         )
     except SilverDateFailure as exc:
         print(f"Silver date failure: {exc}")
@@ -99,7 +100,9 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 1
 
     print(
-        f"Done: {summary['processed']} processed, {summary['skipped']} skipped, "
+        f"Done: {summary['built']} built, {summary['skipped']} skipped, "
+        f"{summary['rebuilt_due_to_input_change']} rebuilt (input change), "
+        f"{summary['unfingerprinted']} unfingerprinted, {summary['adopted']} adopted, "
         f"{summary['failed']} failed in {summary['wall_seconds']:.1f}s "
         f"(peak RSS {summary['peak_rss_mb']:.0f} MB)"
     )
@@ -198,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument("--month", type=int, required=True)
         cmd.add_argument("--no-verify-checksum", action="store_true", help="skip SHA-256 on Bronze reads")
         cmd.add_argument("--force", action="store_true", help="rebuild dates even if output exists")
+        cmd.add_argument("--adopt", action="store_true", help="write fingerprints for existing files without rebuilding")
         cmd.set_defaults(func=cmd_build)
 
     status = sub.add_parser("status", help="count Silver files against ledger dates")

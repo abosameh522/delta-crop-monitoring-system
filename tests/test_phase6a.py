@@ -247,20 +247,93 @@ def test_run_log_written_on_failure_with_failed_status(tmp_path):
 def test_scheduled_run_without_in_progress_year_is_logged_noop():
     from delta_crops.orchestration.flow import scheduled_noop
 
-    result = scheduled_noop([2019, 2020, 2021, 2022, 2023], None)
+    result = scheduled_noop.fn([2019, 2020, 2021, 2022, 2023], None)
     assert result["status"] == "no_op"
 
 
 # ─── Placeholders for later steps: call the real (not yet written) target, never constants ───
 
 
-@pytest.mark.xfail(reason="step 4: Silver input fingerprint not implemented", strict=True)
-def test_silver_fingerprint_changes_when_selected_asset_changes():
-    from delta_crops.transform.silver import silver_fingerprint
-
-    assert silver_fingerprint(["S2A_36RTV_20230101_0_L2A"]) != silver_fingerprint(
-        ["S2B_36RTV_20230101_0_L2A"]
+def test_silver_fingerprint_changes_when_selected_asset_changes(tmp_path, monkeypatch):
+    """Fingerprint changes when the selected asset's item_id or sha256 changes."""
+    from delta_crops.transform.silver import (
+        compute_fingerprint,
+        fingerprints_match,
+        SILVER_FINGERPRINT_VERSION,
     )
+    from delta_crops.transform.bronze_reader import Asset
+
+    # Create a mock grid and config
+    from delta_crops.transform.grid import Grid
+    import numpy as np
+    from delta_crops.config import Config, BBox, Seasons, Sources, Quality, Silver, Grid as GridConfig, Gold, Heatwave
+
+    grid = Grid(x0=0.0, y0=0.0, ncols=10, nrows=10, cell_size_m=100)
+    keep_cells = np.ones(100, dtype=bool)
+    total_px = np.full(100, 100, dtype=np.int32)
+
+    config = Config(
+        name="test",
+        bbox=BBox(west=0, south=0, east=0.1, north=0.1),
+        crs="EPSG:32636",
+        seasons=Seasons(focus=2023, years=(2023,), window_start="05-01", window_end="09-30", label="test"),
+        grid=GridConfig(cell_size_m=100, crs="EPSG:32636"),
+        sources=Sources(imagery="test", imagery_fallback="test"),
+        quality=Quality(max_scene_cloud_pct=20.0, min_weekly_observations=2, max_weekly_masked_pct=50.0),
+        data_quality={},
+        silver=Silver(
+            min_valid_fraction=0.1,
+            masked_scl_classes=(3, 8, 9, 10, 11),
+            tile_priority=("36RTV", "36RUV"),
+            max_scl_dark_pct=0.1,
+            max_scl_unclassified_pct=0.1,
+            stable_target=None,
+        ),
+        gold=None,
+    )
+
+    # Base tiles
+    tiles1 = {
+        "36RTV": {
+            "B04": Asset(band="B04", tile="36RTV", path=tmp_path / "a.tif", item_id="S2A_36RTV", sha256="abc123"),
+            "B08": Asset(band="B08", tile="36RTV", path=tmp_path / "b.tif", item_id="S2A_36RTV", sha256="def456"),
+            "SCL": Asset(band="SCL", tile="36RTV", path=tmp_path / "c.tif", item_id="S2A_36RTV", sha256="ghi789"),
+        }
+    }
+
+    fp1 = compute_fingerprint(tiles1, grid, keep_cells, total_px, config)
+    assert fp1["version"] == SILVER_FINGERPRINT_VERSION
+    assert fp1["assets"]["36RTV"]["B04"]["item_id"] == "S2A_36RTV"
+
+    # Change item_id -> fingerprint should differ
+    tiles2 = {
+        "36RTV": {
+            "B04": Asset(band="B04", tile="36RTV", path=tmp_path / "a.tif", item_id="S2B_36RTV", sha256="abc123"),
+            "B08": Asset(band="B08", tile="36RTV", path=tmp_path / "b.tif", item_id="S2A_36RTV", sha256="def456"),
+            "SCL": Asset(band="SCL", tile="36RTV", path=tmp_path / "c.tif", item_id="S2A_36RTV", sha256="ghi789"),
+        }
+    }
+    fp2 = compute_fingerprint(tiles2, grid, keep_cells, total_px, config)
+    assert not fingerprints_match(fp1, fp2)
+
+    # Change sha256 -> fingerprint should differ
+    tiles3 = {
+        "36RTV": {
+            "B04": Asset(band="B04", tile="36RTV", path=tmp_path / "a.tif", item_id="S2A_36RTV", sha256="different"),
+            "B08": Asset(band="B08", tile="36RTV", path=tmp_path / "b.tif", item_id="S2A_36RTV", sha256="def456"),
+            "SCL": Asset(band="SCL", tile="36RTV", path=tmp_path / "c.tif", item_id="S2A_36RTV", sha256="ghi789"),
+        }
+    }
+    fp3 = compute_fingerprint(tiles3, grid, keep_cells, total_px, config)
+    assert not fingerprints_match(fp1, fp3)
+
+    # Same inputs -> fingerprint matches
+    assert fingerprints_match(fp1, fp1)
+
+    # Different version -> no match
+    fp1_bad_version = dict(fp1)
+    fp1_bad_version["version"] = "silver_v99"
+    assert not fingerprints_match(fp1_bad_version, fp1)
 
 
 @pytest.mark.xfail(reason="step 6: Gold fingerprint with as_of not implemented", strict=True)
@@ -317,6 +390,292 @@ def test_gold_regression_except_is_identical_in_both_directions():
     from scripts.gold_regression import run_regression
 
     assert run_regression(Path("data/_regression/gold_before"), Path("data"))
+
+
+# ─── Silver fingerprint build behavior tests ───
+
+
+def _setup_test_silver_build(tmp_path, monkeypatch):
+    """Create a minimal Silver build environment for fingerprint tests."""
+    from delta_crops.transform import silver
+    from delta_crops.transform.grid import Grid
+    from delta_crops.config import Config, BBox, Seasons, Sources, Quality, Silver as SilverConfig, Grid as GridConfig
+    import numpy as np
+
+    root = tmp_path / "lake"
+    (root / "silver").mkdir(parents=True)
+    (root / "bronze/_logs").mkdir(parents=True)
+    (root / "bronze/assets/36RTV").mkdir(parents=True)
+
+    # Minimal config
+    config = Config(
+        name="test",
+        bbox=BBox(west=0, south=0, east=0.1, north=0.1),
+        crs="EPSG:32636",
+        seasons=Seasons(focus=2023, years=(2023,), window_start="05-01", window_end="05-02", label="test"),
+        grid=GridConfig(cell_size_m=100, crs="EPSG:32636"),
+        sources=Sources(imagery="test", imagery_fallback="test"),
+        quality=Quality(max_scene_cloud_pct=20.0, min_weekly_observations=2, max_weekly_masked_pct=50.0),
+        data_quality={},
+        silver=SilverConfig(
+            min_valid_fraction=0.1,
+            masked_scl_classes=(3, 8, 9, 10, 11),
+            tile_priority=("36RTV",),
+            max_scl_dark_pct=0.1,
+            max_scl_unclassified_pct=0.1,
+            stable_target=None,
+        ),
+        gold=None,
+    )
+
+    # Grid: 1 kept cell
+    grid = Grid(x0=0.0, y0=0.0, ncols=1, nrows=1, cell_size_m=100)
+    keep_cells = np.array([True])
+    pixel_mask = np.array([True] * 100, dtype=bool)
+    total_px = np.array([100], dtype=np.int32)
+
+    # Ledger with one date
+    import json
+    from datetime import date
+    log = root / "bronze/_logs/ingestion_log.jsonl"
+    records = []
+    for day in (date(2023, 5, 1), date(2023, 5, 2)):
+        for tile in ("36RTV",):
+            for band in ("B04", "B08", "SCL"):
+                asset_path = root / "bronze" / "assets" / tile / f"{day}_{band}.tif"
+                asset_path.write_bytes(b"dummy")
+                records.append(
+                    dict(
+                        asset_key=f"{day}:{tile}:{band}",
+                        source="earth-search",
+                        acquired_at=str(day) + "T08:41:00Z",
+                        tile=tile,
+                        band=band,
+                        path=str(asset_path.relative_to(root)),
+                        bytes=asset_path.stat().st_size,
+                        item_id=f"S2A_{tile}_{day.isoformat()}",
+                        processing_baseline="5.0",
+                    )
+                )
+    log.write_text("\n".join(json.dumps(r) for r in records))
+
+    # Mock process_date to avoid raster I/O
+    from delta_crops.transform.silver import DateOutcome
+    import pyarrow as pa
+    import datetime
+    # date32 is days since epoch
+    epoch = datetime.date(1970, 1, 1)
+    day_int = (datetime.date(2023, 5, 1) - epoch).days
+    fake_table = pa.Table.from_pydict(
+        {
+            "cell_id": pa.array([1], type=pa.int32()),
+            "date": pa.array([day_int], type=pa.date32()),
+            "ndvi": pa.array([0.5], type=pa.float32()),
+            "valid_pixels": pa.array([50], type=pa.uint8()),
+            "total_pixels": pa.array([100], type=pa.uint8()),
+            "masked_pct": pa.array([50.0], type=pa.float32()),
+        }
+    )
+    fake_outcome = DateOutcome(
+        table=fake_table,
+        stats={
+            "tiles": "36RTV", "rows": 1, "seconds": 0.0, "peak_rss_mb": 0.0,
+            "ndvi_p05": 0.5, "ndvi_p50": 0.5, "ndvi_p95": 0.5,
+            "null_pct": 0.0, "masked_p50": 50.0, "masked_p90": 50.0, "masked_max": 50.0,
+            "overlap_median_abs_ndvi": None, "overlap_pixels": 0,
+        },
+        scl_counts=np.zeros(256, dtype=np.int64),
+    )
+    monkeypatch.setattr(silver, "process_date", lambda *a, **k: fake_outcome)
+
+    return root, config, grid, keep_cells, pixel_mask, total_px, silver
+
+
+def test_silver_fingerprint_build_twice_second_skipped(tmp_path, monkeypatch):
+    """Building twice with same inputs: second run skips (fingerprint matches)."""
+    root, config, grid, keep_cells, pixel_mask, total_px, silver = _setup_test_silver_build(tmp_path, monkeypatch)
+
+    # First build
+    summary1 = silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+    )
+    assert summary1["built"] == 1
+    assert summary1["skipped"] == 0
+    assert summary1["rebuilt_due_to_input_change"] == 0
+
+    # Second build (no force) -> should skip due to fingerprint match
+    summary2 = silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+    )
+    assert summary2["built"] == 0
+    assert summary2["skipped"] == 1
+    assert summary2["rebuilt_due_to_input_change"] == 0
+
+
+def test_silver_fingerprint_force_rebuilds(tmp_path, monkeypatch):
+    """--force rebuilds even if fingerprint matches."""
+    root, config, grid, keep_cells, pixel_mask, total_px, silver = _setup_test_silver_build(tmp_path, monkeypatch)
+
+    # First build
+    silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+    )
+
+    # Second build with force -> should rebuild
+    summary = silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=True,
+    )
+    assert summary["built"] == 1
+    assert summary["skipped"] == 0
+
+
+def test_silver_fingerprint_missing_reports_unfingerprinted(tmp_path, monkeypatch):
+    """Legacy file without fingerprint: reports unfingerprinted and skips (no adopt)."""
+    root, config, grid, keep_cells, pixel_mask, total_px, silver = _setup_test_silver_build(tmp_path, monkeypatch)
+
+    # Create a Silver file WITHOUT a fingerprint (simulate legacy)
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from delta_crops.transform.silver import ndvi_path
+
+    target = ndvi_path(root, date(2023, 5, 1))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pylist(
+        [{"cell_id": 1, "date": date(2023, 5, 1), "ndvi": 0.5, "valid_pixels": 50, "total_pixels": 100, "masked_pct": 50.0}]
+    )
+    pq.write_table(table, target)
+    # NO fingerprint file
+
+    summary = silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+        adopt=False,
+    )
+    assert summary["unfingerprinted"] == 1
+    assert summary["built"] == 0
+    assert summary["skipped"] == 0
+
+
+def test_silver_fingerprint_adopt_writes_fingerprint(tmp_path, monkeypatch):
+    """--adopt writes fingerprint for legacy file without rebuilding."""
+    root, config, grid, keep_cells, pixel_mask, total_px, silver = _setup_test_silver_build(tmp_path, monkeypatch)
+
+    # Create a Silver file WITHOUT a fingerprint (simulate legacy)
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from delta_crops.transform.silver import ndvi_path, fingerprint_path
+
+    target = ndvi_path(root, date(2023, 5, 1))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pylist(
+        [{"cell_id": 1, "date": date(2023, 5, 1), "ndvi": 0.5, "valid_pixels": 50, "total_pixels": 100, "masked_pct": 50.0}]
+    )
+    pq.write_table(table, target)
+    # NO fingerprint file
+
+    summary = silver.build(
+        dates=[date(2023, 5, 1)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+        adopt=True,
+    )
+    assert summary["adopted"] == 1
+    assert summary["built"] == 0
+    assert summary["unfingerprinted"] == 0
+    # Fingerprint file should now exist
+    fp = fingerprint_path(root, date(2023, 5, 1))
+    assert fp.exists()
+
+
+def test_silver_fingerprint_input_change_rebuilds(tmp_path, monkeypatch):
+    """If input asset changes (different item_id), only that date rebuilds."""
+    root, config, grid, keep_cells, pixel_mask, total_px, silver = _setup_test_silver_build(tmp_path, monkeypatch)
+
+    # First build with original assets
+    summary1 = silver.build(
+        dates=[date(2023, 5, 1), date(2023, 5, 2)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+    )
+    assert summary1["built"] == 2
+
+    # Modify the ledger for one date (change item_id for 2023-05-01)
+    import json
+    log = root / "bronze/_logs/ingestion_log.jsonl"
+    records = []
+    for line in log.read_text().strip().split("\n"):
+        rec = json.loads(line)
+        if "2023-05-01" in rec["acquired_at"] and rec["band"] == "B04":
+            rec["item_id"] = "S2B_36RTV_2023-05-01"  # Changed!
+        records.append(rec)
+    log.write_text("\n".join(json.dumps(r) for r in records))
+
+    # Second build - should rebuild only 2023-05-01
+    summary2 = silver.build(
+        dates=[date(2023, 5, 1), date(2023, 5, 2)],
+        config=config,
+        data_root=root,
+        keep_cells=keep_cells,
+        pixel_mask=pixel_mask,
+        total_px=total_px,
+        grid=grid,
+        verify_checksum=False,
+        force=False,
+    )
+    assert summary2["rebuilt_due_to_input_change"] == 1
+    assert summary2["skipped"] == 1  # 2023-05-02 unchanged
+    assert summary2["built"] == 0
 
 
 # ─── Fast unit test of the comparison function on tiny fixtures ───

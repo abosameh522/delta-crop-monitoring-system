@@ -8,6 +8,8 @@ Every kept cell is written for every date, so rows = dates x kept cells.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import resource
 import time
@@ -26,6 +28,97 @@ from delta_crops.config import Config
 from delta_crops.transform import bronze_reader
 from delta_crops.transform.grid import PIXELS_PER_CELL, Grid, cell_ids
 from delta_crops.transform.reflectance import ndvi_with_mask
+
+# Fingerprint code version — bump when fingerprint logic changes.
+SILVER_FINGERPRINT_VERSION = "silver_v1"
+
+
+def fingerprint_path(root: Path, day: date) -> Path:
+    """Path to the fingerprint file for a Silver NDVI parquet."""
+    return ndvi_path(root, day).with_suffix(".parquet.fingerprint.json")
+
+
+def _hash_grid(grid: Grid) -> str:
+    """Stable hash of the grid parameters that affect Silver output."""
+    blob = f"{grid.x0}|{grid.y0}|{grid.ncols}|{grid.nrows}|{grid.cell_size_m}"
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _hash_config_silver(config: Config) -> str:
+    """Stable hash of Silver config parameters that affect processing."""
+    s = config.silver
+    blob = (
+        f"masked_scl={s.masked_scl_classes}|"
+        f"dark_pct={s.max_scl_dark_pct}|"
+        f"unclass_pct={s.max_scl_unclassified_pct}|"
+        f"priority={s.tile_priority}|"
+        f"min_valid_frac={s.min_valid_fraction}"
+    )
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _hash_cells(keep_cells: np.ndarray, total_px: np.ndarray) -> str:
+    """Stable hash of the cell mask and total pixels per cell."""
+    # Use bytes of the arrays for deterministic hashing
+    blob = keep_cells.tobytes() + total_px.tobytes()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def compute_fingerprint(
+    tiles: dict[str, dict[str, bronze_reader.Asset]],
+    grid: Grid,
+    keep_cells: np.ndarray,
+    total_px: np.ndarray,
+    config: Config,
+) -> dict[str, Any]:
+    """Compute a fingerprint for one date's Silver inputs."""
+    assets = {}
+    for tile, bands in tiles.items():
+        assets[tile] = {
+            band: {"item_id": asset.item_id, "sha256": asset.sha256}
+            for band, asset in bands.items()
+        }
+    return {
+        "version": SILVER_FINGERPRINT_VERSION,
+        "assets": assets,
+        "grid_hash": _hash_grid(grid),
+        "cells_hash": _hash_cells(keep_cells, total_px),
+        "silver_config_hash": _hash_config_silver(config),
+    }
+
+
+def write_fingerprint(path: Path, fingerprint: dict[str, Any]) -> None:
+    """Write fingerprint JSON atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(fingerprint, f, sort_keys=True, separators=(",", ":"))
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def read_fingerprint(path: Path) -> dict[str, Any] | None:
+    """Read fingerprint JSON; return None if missing or invalid."""
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001 - corrupt fingerprint is treated as missing
+        return None
+
+
+def fingerprints_match(stored: dict[str, Any] | None, current: dict[str, Any]) -> bool:
+    """Check if stored fingerprint matches current inputs."""
+    if stored is None:
+        return False
+    # Version mismatch means we can't compare
+    if stored.get("version") != SILVER_FINGERPRINT_VERSION:
+        return False
+    return stored == current
+
 
 NDVI_SCHEMA = pa.schema(
     [
@@ -291,8 +384,17 @@ def build(
     grid: Grid,
     verify_checksum: bool = True,
     force: bool = False,
+    adopt: bool = False,
 ) -> dict[str, Any]:
-    """Process dates, skipping valid existing outputs. Returns a run summary."""
+    """Process dates, skipping valid existing outputs. Returns a run summary.
+
+    Fingerprint-aware skipping:
+      - --force: always rebuild
+      - Fingerprint matches: skip (counted as "skipped")
+      - Fingerprint differs: rebuild (counted as "rebuilt_due_to_input_change")
+      - No fingerprint (legacy file): if --adopt, verify and write fingerprint then skip
+        (counted as "adopted"); else skip and report "unfingerprinted".
+    """
     from delta_crops.errors import SilverDateFailure, TransientFailure
 
     ledger = bronze_reader.load_ledger(data_root)
@@ -300,21 +402,75 @@ def build(
     scl_by_year: dict[int, np.ndarray] = {}
     report_rows: list[dict[str, Any]] = []
     overlap_rows: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"processed": 0, "skipped": 0, "failed": 0, "errors": []}
+    summary: dict[str, Any] = {
+        "built": 0,
+        "skipped": 0,
+        "rebuilt_due_to_input_change": 0,
+        "unfingerprinted": 0,
+        "adopted": 0,
+        "failed": 0,
+        "errors": [],
+    }
     started_all = time.monotonic()
     dates = list(dates)
 
     for index, day in enumerate(dates, start=1):
         target = ndvi_path(data_root, day)
-        if not force and is_valid_output(target, expected_rows):
-            summary["skipped"] += 1
-            if index % 25 == 0:
-                print(f"[{index}/{len(dates)}] {day} skip (valid output exists)", flush=True)
-            continue
+        fp_path = fingerprint_path(data_root, day)
 
+        if not force and is_valid_output(target, expected_rows):
+            # File exists and has correct row count — check fingerprint
+            tiles, problems = bronze_reader.assets_for_date(
+                ledger, data_root, day, verify_checksum=verify_checksum
+            )
+            if problems or not tiles:
+                summary["failed"] += 1
+                summary["errors"].append(f"{day}: invalid Bronze inputs: {problems}")
+                continue
+            current_fp = compute_fingerprint(tiles, grid, keep_cells, total_px, config)
+            stored_fp = read_fingerprint(fp_path)
+            if stored_fp is None:
+                # Legacy file without fingerprint
+                if adopt:
+                    # Need to read assets to compute real fingerprint
+                    tiles, problems = bronze_reader.assets_for_date(
+                        ledger, data_root, day, verify_checksum=verify_checksum
+                    )
+                    if problems:
+                        raise bronze_reader.LedgerError("; ".join(problems))
+                    if not tiles:
+                        raise bronze_reader.LedgerError("no assets in ledger")
+                    current_fp = compute_fingerprint(
+                        tiles, grid, keep_cells, total_px, config
+                    )
+                    write_fingerprint(fp_path, current_fp)
+                    summary["adopted"] += 1
+                    if index % 25 == 0:
+                        print(f"[{index}/{len(dates)}] {day} adopt (wrote fingerprint)", flush=True)
+                    continue
+                else:
+                    summary["unfingerprinted"] += 1
+                    if index % 25 == 0:
+                        print(f"[{index}/{len(dates)}] {day} skip (unfingerprinted)", flush=True)
+                    continue
+            elif not fingerprints_match(stored_fp, current_fp):
+                # Inputs changed — will rebuild below
+                rebuild_reason = "input changed"
+            else:
+                # Fingerprint matches — skip
+                summary["skipped"] += 1
+                if index % 25 == 0:
+                    print(f"[{index}/{len(dates)}] {day} skip (fingerprint matches)", flush=True)
+                continue
+        else:
+            rebuild_reason = None  # fresh build (no valid output, or force)
+
+        # Need to build (either force, no valid output, or fingerprint mismatch)
         started = time.monotonic()
         try:
-            tiles, problems = bronze_reader.assets_for_date(ledger, data_root, day, verify_checksum=verify_checksum)
+            tiles, problems = bronze_reader.assets_for_date(
+                ledger, data_root, day, verify_checksum=verify_checksum
+            )
             if problems:
                 raise bronze_reader.LedgerError("; ".join(problems))
             if not tiles:
@@ -339,8 +495,28 @@ def build(
             continue
 
         write_parquet_atomic(outcome.table, target)
+
+        # Write fingerprint for successful build
+        current_fp = compute_fingerprint(tiles, grid, keep_cells, total_px, config)
+        write_fingerprint(fp_path, current_fp)
+
         elapsed = time.monotonic() - started
-        summary["processed"] += 1
+
+        # Count as rebuilt or fresh build
+        if rebuild_reason == "input changed":
+            summary["rebuilt_due_to_input_change"] += 1
+            print(
+                f"[{index}/{len(dates)}] {day} rebuilt (input changed) "
+                f"tiles={len(tiles)} rows={outcome.stats['rows']} {elapsed:.2f}s",
+                flush=True,
+            )
+        else:
+            summary["built"] += 1
+            print(
+                f"[{index}/{len(dates)}] {day} built "
+                f"tiles={len(tiles)} rows={outcome.stats['rows']} {elapsed:.2f}s",
+                flush=True,
+            )
 
         stats = dict(outcome.stats)
         stats["seconds"] = elapsed
@@ -356,12 +532,6 @@ def build(
                     "pixels": stats["overlap_pixels"],
                 }
             )
-        print(
-            f"[{index}/{len(dates)}] {day} tiles={stats['tiles']} rows={stats['rows']} {elapsed:.2f}s "
-            f"ndvi_p50={stats['ndvi_p50'] if stats['ndvi_p50'] is None else round(stats['ndvi_p50'], 3)} "
-            f"null={stats['null_pct']:.1f}% masked_p50={stats['masked_p50']:.1f}%",
-            flush=True,
-        )
 
     if report_rows:
         upsert_report(reports_dir(data_root) / "dates.parquet", report_rows, REPORT_SCHEMA)
