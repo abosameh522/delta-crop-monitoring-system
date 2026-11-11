@@ -114,7 +114,10 @@ def new_run_record(years: list[int], config: Config) -> dict[str, Any]:
         "silver": {},
         "quality": {},
         "gold": {},
-        "weekly_verify": "not_run",
+        "gold_verify": "not_run",
+        "gold_verify_summary": {},
+        "bronze_verify": "not_run",
+        "bronze_verify_years": {},
         "duration_s": None,
         "config": config.name,
     }

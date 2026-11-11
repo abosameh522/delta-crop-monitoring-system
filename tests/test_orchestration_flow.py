@@ -22,6 +22,8 @@ from delta_crops.orchestration.flow import PipelineError, TransientError
 
 CONFIG = load_config()
 
+pytestmark = pytest.mark.flow
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _prefect_harness():
@@ -117,7 +119,8 @@ def test_all_tasks_succeed_and_write_run_log(monkeypatch, tmp_path):
     # Scheduled ingest trusts ledger + size; the weekly flow owns full checksums.
     assert "--no-checksum" in calls.argv["ingest"][0]
     assert "--no-verify-checksum" in calls.argv["silver"][0]
-    assert record["weekly_verify"] == "ok"
+    assert record["gold_verify"] == "ok"
+    assert record["bronze_verify"] == "not_run"
 
 
 def test_transient_ingest_code_3_retries_then_succeeds(monkeypatch, tmp_path):
@@ -285,5 +288,6 @@ def test_weekly_verify_flow_runs_full_checksum_path(monkeypatch, tmp_path):
     # No --no-checksum: this flow exists to re-hash every asset.
     assert "--no-checksum" not in calls[0]
     record = _run_log(tmp_path)[0]
-    assert record["weekly_verify"] == "ok"
-    assert record["verify"] == {"2027": {"exit_code": 0}}
+    assert record["bronze_verify"] == "ok"
+    assert record["bronze_verify_years"] == {"2027": {"exit_code": 0}}
+    assert record["gold_verify"] == "not_run"

@@ -154,6 +154,9 @@ def _make_tasks(retries: int, retry_delays: list[float]):
         )))
         build = read_summary(build_path)
         if code != 0:
+            detail = build.get("error")
+            if detail and code not in {3}:
+                raise PipelineError("gold", code, f"gold exited with code {code}: {detail}")
             raise_for_exit_code("gold", code)
 
         verify_path = summary_path(Path(data_dir), "gold_verify")
@@ -167,7 +170,7 @@ def _make_tasks(retries: int, retry_delays: list[float]):
             "exit_code": 0,
             "build": build,
             "verify": verify,
-            "weekly_verify": verify.get("status", "ok"),
+            "gold_verify": verify.get("status", "ok"),
         }
 
     return ingest_task, silver_task, quality_task, gold_task
@@ -247,8 +250,8 @@ def run_pipeline(
         record["tasks"]["gold"] = {"status": "running", "exit_code": None}
         gold = gold_task(data_dir, config_path)
         record["gold"] = gold.get("build", {})
-        record["gold_verify"] = gold.get("verify", {})
-        record["weekly_verify"] = gold.get("weekly_verify", "ok")
+        record["gold_verify"] = gold.get("gold_verify", "ok")
+        record["gold_verify_summary"] = gold.get("verify", {})
         record["tasks"]["gold"] = {"status": "ok", "exit_code": 0}
 
         finish_run_record(record, "ok", started)
@@ -294,15 +297,15 @@ def run_verify(
             code = int(ingest_cli.main(_cli_argv(
                 data_dir, config_path, "verify", "--year", str(year),
             )))
-            record.setdefault("verify", {})[str(year)] = {"exit_code": code}
+            record["bronze_verify_years"][str(year)] = {"exit_code": code}
             if code != 0:
                 raise_for_exit_code("verify", code)
-        record["weekly_verify"] = "ok"
+        record["bronze_verify"] = "ok"
         finish_run_record(record, "ok", started)
         return {"status": "ok", "years": selected, "run_id": record["run_id"]}
     except (PipelineError, TransientError) as error:
         code = int(getattr(error, "exit_code", 3))
-        record["weekly_verify"] = "failed"
+        record["bronze_verify"] = "failed"
         finish_run_record(record, "failed", started)
         logger.error("Weekly Bronze verify failed (exit %s): %s", code, error)
         raise
