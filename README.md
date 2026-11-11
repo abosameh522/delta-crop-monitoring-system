@@ -18,6 +18,34 @@ cp .env.example .env   # add your Copernicus Data Space credentials
 pytest -q
 ```
 
+Fast local loop (skips the slower Prefect flow tests):
+
+```bash
+pytest -q -m "not flow and not slow"
+```
+
+## Orchestration
+
+Run the scheduled pipeline once (it processes only configured seasons that are
+still in progress; today that is a logged no-op):
+
+```bash
+python -m delta_crops.orchestration
+python -m delta_crops.orchestration --reprocess-year 2021   # explicit complete year
+```
+
+Operational notes:
+
+- **All incomplete years are processed.** If two configured seasons are open at
+  once, both are ingested and Silver-built in the same run.
+- **Disk-full writes are not retried.** An `OSError` from a Bronze write is a
+  failed asset (exit 4); free disk space and re-run the ingest.
+- **Silver identity is metadata-based.** Fingerprints use partition names, file
+  sizes and `mtime_ns`, not content hashes. Copying `data/silver` to another
+  machine changes mtimes and makes Gold rebuild unless fingerprints are copied
+  or adopted (`--adopt`); preserving mtimes avoids the rebuild.
+
+
 ## Layout
 
 `config/` AOI and season · `src/delta_crops/` pipeline code · `tests/` pytest suite · `dags/` orchestration ·

@@ -3,15 +3,56 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Step 8 (real four-task flow, retries, failure run log, partial weather) implemented and verified; awaiting acceptance. Phase 6b NOT started.
-- **Done this session:** Step 8 — `orchestration/flow.py` (retry contract, `retry_codes() == {3}`, `TransientError`/`PipelineError`, `retry_condition_fn`, run records) and `orchestration/pipeline.py` (ingest -> Silver -> quality -> Gold tasks calling the real CLI `main()` in-process). Scheduled entry processes only incomplete configured seasons; today it logs an explicit `no_op`. `python -m delta_crops.orchestration` is the manual/scheduled entry with `--reprocess-year`. Partial weather is wired with `--allow-partial-weather-year` and `weather_status=partial`. Every run appends one `_logs/pipeline_runs.jsonl` record in `try/finally`, including failures. CLIs gained `--summary-json` so the run log uses real build summaries; ingestion stats now include `bytes`.
-- **Half-done / NOT DONE:** Phase 6b (Docker Compose). Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
-- **Tests:** default 131 passed, 1 slow deselected, 18.14s; slow 1 passed, 131 deselected, 49.20s. 132 total. No unexpected failing tests. Both former Step 8 xfails are now real tests.
-- **Regression:** Step 8 does not change Silver/Gold math; the slow Gold regression still passes against the frozen 15 table/year snapshot.
-- **Step 8 behaviour:** only CLI exit 3 retries (3 retries, 1/2/4 s, tests 0 s); 4/10/11/1 are `PipelineError` and never retried; quality is `retries=0`; a failed task stops downstream. Scheduled ingest uses `--no-checksum` (ledger + size); Silver uses `--no-verify-checksum`; a separate `weekly_verify_flow` re-hashes Bronze (`verify`) and writes its own `weekly_verify` run record.
-- **Step 7 behaviour (retained):** asset retries 3 x task retries 3 = 9 attempts max; `AssetFailure` (4) is not retried. `OSError` from a write (e.g. disk full) is one failed asset (exit 4) and needs manual intervention. Bronze driver remains explicit `COG` (GTiff container, Phase 2 decision), written as `<band>.tif.tmp` then `os.replace`.
-- **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs, no overlap (02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11). PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
-- **Next:** Step 8 acceptance pending. Phase 6a is implemented but awaiting acceptance. No flow was run against real data.
+- **Current step:** Step 8b follow-ups complete and verified; awaiting acceptance. Phase 6b NOT started.
+- **Done this session:** Step 8b — (1) real end-to-end integration test; (2) unambiguous run-log
+  fields (`gold_verify` / `gold_verify_summary` for Gold verification, `bronze_verify` /
+  `bronze_verify_years` for the weekly checksum flow, both `not_run` by default); (3) `flow`
+  pytest marker so the quick loop can exclude Prefect harness tests while CI keeps them;
+  (4) operational notes in README + `docs/phase6-orchestration.md`; (5) Gold regression re-run.
+- **Step 8 base (retained):** `orchestration/flow.py` (retry contract, `retry_codes() == {3}`,
+  `TransientError`/`PipelineError`, `retry_condition_fn`, run records) and
+  `orchestration/pipeline.py` (ingest -> Silver -> quality -> Gold tasks calling the real CLI
+  `main()` in-process). Scheduled entry processes only incomplete configured seasons and logs an
+  explicit `no_op`. `python -m delta_crops.orchestration` is the manual/scheduled entry with
+  `--reprocess-year`. Partial weather uses `--allow-partial-weather-year` / `weather_status=partial`.
+  Every run appends one `_logs/pipeline_runs.jsonl` record in `try/finally`. CLIs have
+  `--summary-json` so the run log holds real build summaries; ingestion stats include `bytes`.
+- **Integration test:** `tests/test_orchestration_integration.py` runs the **real** four CLI mains
+  on a tiny temp lake (1 tile x 3 dates, mini ledger, `cells.parquet`, weather, orbit cache) with
+  only STAC search, remote `read_window` and Open-Meteo mocked. First run: ingest `new=9`,
+  Silver `built=3`, quality `passed`, each Gold table `built=1`, `gold_verify=ok`. Second run:
+  0 imagery reads, ingest `skipped=9`, Silver `skipped=3`, Gold tables `skipped=1`.
+- **Bug found and fixed by that test:** `gold/cli.py` crashed with
+  `TypeError: Object of type date is not JSON serializable` because summaries contain `as_of`
+  dates. Fixed with `default=str` in every `json.dumps` of a summary, plus `summary["error"]`
+  so `PipelineError` carries the real cause instead of a bare exit code.
+- **Tests:** default `132 passed, 1 deselected, 38.41s`; slow `1 passed, 132 deselected, 52.15s`;
+  quick loop `pytest -m "not flow and not slow"` -> `121 passed, 12 deselected, 5.59s`.
+  The default suite grew from ~3–6 s to ~21–38 s because each Prefect flow module pays ~4 s of
+  in-process harness setup plus 1–2 s per flow run (state transitions); `--durations=10` shows it.
+  No unexpected failing tests.
+- **Regression:** `scripts/gold_regression.py` re-run after Step 8b: 15/15 table/year checks
+  identical to the frozen snapshot (weekly_ndvi / ndvi_anomaly 2019–2023 x 4,786,080 rows each,
+  weekly_weather 20 rows each); build 40.60 s, total 47.15 s.
+- **Half-done / NOT DONE:** Phase 6b (Docker Compose). Legacy Silver outputs still need explicit
+  adoption; their provenance is not established by current inputs alone.
+- **Step 8 behaviour:** only CLI exit 3 retries (3 retries, 1/2/4 s, tests 0 s); 4/10/11/1 are
+  `PipelineError` and never retried; quality is `retries=0`; a failed task stops downstream.
+  Scheduled ingest uses `--no-checksum` (ledger + size); Silver uses `--no-verify-checksum`; the
+  separate `weekly_verify_flow` re-hashes Bronze (`verify`) and writes `bronze_verify`.
+- **Step 7 behaviour (retained):** asset retries 3 x task retries 3 = 9 attempts max;
+  `AssetFailure` (4) is not retried. `OSError` from a write (e.g. disk full) is one failed asset
+  (exit 4) and needs manual intervention. Bronze driver remains explicit `COG` (GTiff container,
+  Phase 2 decision), written as `<band>.tif.tmp` then `os.replace`.
+- **Operational notes (documented):** all configured incomplete years are processed in one run;
+  disk-full `OSError` = failed asset needing manual action; Silver identity is metadata-based
+  (partition names, sizes, `mtime_ns`), so copying `data/silver` to another machine rebuilds Gold
+  unless fingerprints are copied or adopted (`--adopt`).
+- **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently
+  submitted runs, no overlap (02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11).
+  PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
+- **Next:** Step 8b acceptance pending.
+  No flow was run against real data.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 

@@ -171,7 +171,10 @@ Fields: `run_id`, `start_utc`, `end_utc`, `status`, `years`, `as_of` per year,
 `tasks` (status + exit code per task), `ingest` (new / skipped / bytes /
 weather), `silver` (built / skipped / rebuilt_due_to_input_change /
 unfingerprinted / failed), `quality` (status and failed checks), `gold` (per
-table counts), `gold_verify`, `weekly_verify`, `duration_s`.
+table counts), `gold_verify`, `gold_verify_summary`, `bronze_verify`,
+`bronze_verify_years`, `duration_s`. `gold_verify` is the Gold verification
+status; `bronze_verify` belongs to the separate weekly checksum flow. Both are
+`not_run` when that step did not execute in the record's run.
 
 The CLI writes a small JSON summary (`--summary-json`) next to the run log
 (`_logs/task_summaries/`); the flow reads it back. If a summary is missing (for
@@ -183,11 +186,27 @@ Scheduled ingestion passes `--no-checksum` and Silver passes
 `--no-verify-checksum`: both trust the ledger plus file size, so a re-run does
 no re-hashing. The separate `weekly_verify_flow` runs the ingestion `verify`
 command for every configured year with full SHA-256 checking and writes its own
-run-log record (`weekly_verify=ok|failed`). In the main pipeline record,
-`weekly_verify` is the Gold verification status and `gold_verify` holds its
-summary; in the separate flow the same `weekly_verify` field reports the Bronze
-checksum result. This keeps the fast scheduled path
-fast while a weekly job still proves Bronze integrity.
+run-log record (`bronze_verify=ok|failed`, `bronze_verify_years`). In the main
+pipeline record, `gold_verify` is the Gold verification status and
+`gold_verify_summary` holds its summary; `bronze_verify` stays `not_run` because
+that flow did not run. This keeps the fast scheduled path fast while a weekly
+job still proves Bronze integrity.
+
+### Operational notes
+
+- **Multiple incomplete years:** `run_pipeline` processes *every* configured
+  year whose season is not complete, not just the first one. Today none are
+  incomplete, so the scheduled run is a no-op. If two seasons are open at once,
+  both are ingested/Silver-built in the same run.
+- **Disk-full writes:** an `OSError` from a Bronze write (for example a full
+  disk) is a failed asset with exit 4, not a transient error. The task does not
+  retry it; free space and re-run the ingest. The same applies to any asset
+  write that fails after retries.
+- **Silver identity is metadata-based:** Silver fingerprints use partition
+  names, file sizes and `mtime_ns`, not content hashes. Copying `data/silver` to
+  another machine (or restoring it) changes mtimes, so Gold will consider its
+  inputs changed and rebuild unless the fingerprints are copied too or adopted
+  with the `--adopt` path. Moving files with preserved mtimes avoids the rebuild.
 
 ### Failure caveat from Step 7
 
@@ -205,4 +224,25 @@ exhausts 1 + 3 attempts; no in-progress year logs a no-op; failure run log
 fields; explicit reprocess year; weekly verify flow; and a real ingestion CLI
 summary consumed by the flow (including `partial` weather). `tests/test_ingestion.py`
 adds a real partial-weather store/refresh test and the CLI flag wiring test.
-No test touches real data or a live Prefect server.
+`tests/test_orchestration_integration.py` goes further: it runs the **real** four
+CLI mains on a tiny temporary lake (1 tile, 3 dates, mini ledger, `cells.parquet`,
+weather, orbit cache) and mocks only the three network boundaries (STAC search,
+remote raster reads, Open-Meteo). It asserts the flow's flags, real Silver/Gold
+outputs and run-log counts, then re-runs to prove 0 imagery downloads, Silver
+skips and Gold skips. No test touches real data or a live Prefect server.
+
+### Test runtime and the `flow` marker
+
+The quick suite used to run in ~3–6 s. It is now ~28 s because every Prefect flow
+test starts the in-process harness server and every flow/task run pays the
+Prefect state-transition cost. `pytest --durations=10` shows ~4 s of harness
+setup per flow-test module and 1–2 s per flow run; the pipeline logic itself is
+milliseconds. The flow and integration tests are marked `flow` and remain in the
+default CI run. For a fast local loop use:
+
+```bash
+pytest -q -m "not flow and not slow"
+```
+
+CI/acceptance keeps running `pytest -q` (includes `flow`) and
+`pytest -q -m slow`.
