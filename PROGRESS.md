@@ -70,8 +70,11 @@
   quality `retries=0`, every run appends `_logs/pipeline_runs.jsonl` in `try/finally`,
   `gold_verify`/`bronze_verify` fields, partial weather via `--allow-partial-weather-year`,
   real end-to-end integration test with only network mocked.
-- **Tests now:** default `142 passed, 1 deselected`; quick loop `-m "not flow and not slow"`
-  fast (<10 s); slow `-m slow` 1 test. Gold regression 15/15 identical (last run 47.15 s).
+- **Tests then (historical, Phase 6a — do not read as current):** default
+  `142 passed, 1 deselected`; quick loop `-m "not flow and not slow"` fast (<10 s); slow
+  `-m slow` 1 test; Gold regression 15/15 identical (47.15 s). Current counts are in
+  the status section above: host full suite `150 passed, 1 deselected`; quick loop `139 passed,
+  12 deselected`.
 - **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
   adopted (2026-11-11), but the scheduled flow has never run end-to-end on real data. Phase 7+
   not started. Legacy Silver outputs were adopted on 2026-11-11.
