@@ -200,10 +200,16 @@ def ingest_scenes(
             array, transform, crs, nodata = read_window(scene.hrefs[band], bbox)
         except Exception as exc:  # noqa: BLE001 - network/STAC read errors are transient
             raise TransientFailure(f"read_window failed for {asset_key}") from exc
+        tmp_path = target.with_suffix(target.suffix + ".tmp")
         try:
             write_cog(target, array, transform, crs, nodata)
         except Exception as exc:  # noqa: BLE001 - write errors are transient
+            # write_cog is atomic, but a mocked or interrupted writer must not
+            # leave target.tif.tmp behind either.
+            tmp_path.unlink(missing_ok=True)
             raise TransientFailure(f"write_cog failed for {asset_key}") from exc
+        # The ledger record is derived from the final file only: the size and
+        # SHA-256 are computed after os.replace has made the output visible.
         record = _record_for_asset(
             scene=scene,
             band=band,
