@@ -47,30 +47,33 @@ Operational notes:
 
 ## Run with Docker
 
-One container serves a five-day Prefect deployment (`flow.serve`, in-process
-API, at most one concurrent run):
+Two containers: a real Prefect server (owns the scheduler and SQLite state) and
+a runner serving the five-day deployment against it.
 
 ```bash
-mkdir -p .prefect .prefect-test
-HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose build
+mkdir -p .prefect
+HOST_UID=1000 HOST_GID=1000 docker compose build
 docker compose up -d
-docker compose ps          # wait for "healthy"
+docker compose ps          # server healthy, then orchestrator healthy
 docker compose logs -f orchestrator
 ```
+
+Build with the literal `1000` ids: deriving them from `id -g` breaks when the
+shell's primary group changed (`newgrp docker`) and the container user stops
+owning `data/`.
 
 Manual run of a complete year, and container-side tests:
 
 ```bash
 docker compose run --rm orchestrator python -m delta_crops.orchestration --reprocess-year 2021
-docker compose --profile test run --rm tests pytest -q -m "not slow and not flow"
+docker compose --profile test run --rm tests
 ```
 
-`data/` and `config/` are mounted (data read-write, config read-only) and
-`PREFECT_HOME` lives in `./.prefect`, never inside `data/`. No ports are
-published, so use `docker compose exec orchestrator prefect ...` for Prefect
-CLI work. Details, trade-offs and the schedule anchor behaviour:
-`docs/phase6b-docker.md`.
-
+`data/` and `config/` are mounted (data read-write, config read-only);
+`PREFECT_HOME` for the server is `./.prefect`, never inside `data/`. No ports
+are published, so use `docker compose exec orchestrator prefect ...`. Why a real
+server is required (an ephemeral API has no scheduler), what each healthcheck
+proves, and the schedule anchor behaviour: `docs/phase6b-docker.md`.
 
 ## Layout
 

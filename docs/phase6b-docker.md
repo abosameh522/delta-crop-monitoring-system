@@ -1,141 +1,166 @@
 # Phase 6b — Docker packaging
 
-One container serves one Prefect deployment. `flow.serve` starts the Prefect
-API (SQLite inside `PREFECT_HOME`) in-process, so there is no separate server
-container and no worker to poll a work pool.
+One `server` container runs a real Prefect server (SQLite state, scheduler
+enabled) and one `orchestrator` container runs a runner that serves the
+five-day deployment against it.
 
-## Why this layout
+## Why not a single container with an ephemeral API
 
-The Phase 6a spike ran `flow.serve(global_limit=1, limit=2)` on Prefect 3.9.2
-with two concurrently submitted runs and observed no overlap
-(02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11). Running the same
-`serve` call inside a container preserves exactly that behaviour with one
-process and one volume.
+The first compose version ran only `flow.serve()` and set
+`PREFECT_API_URL=http://127.0.0.1:4200/api`, expecting an in-process ephemeral
+API. It crash-looped with `httpx.ConnectError` on every restart, and no SQLite
+file was ever created. Reading the installed Prefect 3.9.2 source explains why,
+and also kills the "just remove the variable" fix:
 
-| Option | Verdict |
+| Question | Evidence |
 | --- | --- |
-| `flow.serve(global_limit=1)` in one container | Chosen: one process, no DB bootstrap step, no worker polling, same code path as the spike |
-| `prefect server start` + `prefect worker start` | Rejected as the default: two containers and a migration/ordering step for no capability the project needs |
-| Deployment + cron worker | Rejected: adds a work pool and a third long-lived process |
+| When does an ephemeral server start? | `prefect/client/orchestration/__init__.py:245-258` (`get_client`): `api = PREFECT_API_URL.value()`; `if not api and PREFECT_SERVER_EPHEMERAL_ENABLED:` → `SubprocessASGIServer().start()`. Only when the API URL is empty. |
+| What if `PREFECT_API_URL` is set? | Same lines: the branch is skipped, the client connects to that URL, and nothing is started. With no server there, `httpx.ConnectError` — exactly the crash loop. |
+| Is the ephemeral port fixed? | No. `prefect/server/api/server.py:1123-1125`: `SubprocessASGIServer._port_range = range(8000, 9000)`, and `find_available_port()` (1147-1155) picks a random free port. `get_client` calls `SubprocessASGIServer()` with no port, so no setting can pin it. A fixed-port healthcheck cannot match it. |
+| Would an ephemeral API run the schedule? | **No.** `prefect/server/services/scheduler.py:212-215` registers the scheduler as a perpetual service **without** `run_in_ephemeral=True`, and `prefect/server/services/perpetual_services.py:78-92` filters exactly on that flag. Ephemeral servers run only `run_in_ephemeral` services. `prefect/runner/runner.py:383-386` warns: "Cannot schedule flows on an ephemeral server; run `prefect server start` to start the scheduler." |
 
-Trade-off: run history and schedule state live in the SQLite file under
-`PREFECT_HOME`. Losing that directory loses Prefect history, not data: Bronze,
-Silver and Gold are on the `data/` volume.
+So `PREFECT_API_URL` was not the real bug — the missing **server process** was.
+Removing the variable would have replaced a visible crash loop with a silently
+dead schedule.
 
-## Dependencies
+## Layout
 
-Everything the CLIs import is a **main** dependency, so `uv sync --frozen
---no-dev` produces a working runtime image:
-
-- `prefect`, `duckdb`, `rasterio`, `pyarrow` — declared in
-  `[project].dependencies`;
-- `pyyaml` (config), `pystac-client` (STAC search), `requests` (Open-Meteo);
-- `pandera[pandas]` pulls `pandas` and `numpy` for the quality layer.
-
-`[project.optional-dependencies].dev` contains only `pytest`, and it is
-installed solely in the `test` build stage.
-
-## Images
-
-`Dockerfile` has two targets:
-
-| Stage | Contents | Purpose |
+| Service | Process | Why |
 | --- | --- | --- |
-| `runtime` (default) | `python:3.12-slim`, uv from a pinned image, `.venv` from `uv.lock`, `src/`, `config/` | the shipped image |
-| `test` | `runtime` + `uv sync --frozen --extra dev` | container-side test run |
+| `server` | `prefect server start --host 0.0.0.0 --port 4200 --no-ui` | Runs the scheduler, owns the SQLite state; one job per process |
+| `orchestrator` | `python -m delta_crops.orchestration.serve` | Runner + deployment registration, `PREFECT_API_URL=http://server:4200/api` |
+| `tests` (`--profile test`) | `pytest -q -m "not slow and not flow"` | Container-side suite from the `test` build stage |
 
-Both run as a non-root `app` user whose uid/gid come from the build args
-`UID`/`GID` (default 1000:1000, overridable through `HOST_UID`/`HOST_GID`).
-`data/` is never copied into an image; `.dockerignore` excludes it along with
-`.venv/`, `.git/`, `.prefect/`, caches, `.env`, `tests/` and `docs/`.
+Alternative considered: one container whose entrypoint starts the server in the
+background and then `exec`s the runner. It keeps one container but needs a shell
+entrypoint, a readiness wait loop and signal handling for two processes, and the
+healthcheck would have to describe both. Two services let Compose express the
+startup order (`depends_on: server: condition: service_healthy`) with no bespoke
+script.
 
-## Compose
+## Healthchecks: what they actually prove
+
+| Service | Check | Proves | Does **not** prove |
+| --- | --- | --- | --- |
+| `server` | `GET http://127.0.0.1:4200/api/health` returns `200 true`, plus `PREFECT_HOME` writable | the API process is up, serving, and can persist state | that the scheduler loop is enabled (it is asserted separately by `PREFECT_SERVER_SERVICES_SCHEDULER_ENABLED=true`) |
+| `orchestrator` | `GET http://server:4200/api/health` and `GET /api/deployments/name/delta-crops-phase6a/delta-crops-scheduled` returns `paused: false` | the runner connected to the same API and registered an active deployment | that the runner is making progress — this is **not** a heartbeat; a wedged runner with a registered deployment still reports healthy |
+
+A real heartbeat check would need a `last_polled`/`next_scheduled_start_time`
+assertion; that is future work, not claimed here.
+
+## Images and permissions
+
+`Dockerfile` has two targets: `runtime` (default: `python:3.12-slim`, uv from a
+pinned image, `uv sync --frozen --no-dev`, non-root `app` user, no `data/`) and
+`test` (`+ uv sync --frozen --extra dev`).
+
+`ARG UID=1000` / `ARG GID=1000`, and Compose passes
+`UID: "${HOST_UID:-1000}"` / `GID: "${HOST_GID:-1000}"`. **Build with the
+literal defaults.** The first build picked up gid 966 because the shell's
+primary group had changed (`newgrp docker`); deriving the build args from
+`id -g` reproduces that bug and the container user stops matching the owner of
+`data/`. If a host really needs other ids, pass them explicitly:
 
 ```bash
-mkdir -p .prefect .prefect-test
-HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose build
-docker compose up -d
-docker compose ps
+HOST_UID=1000 HOST_GID=1000 docker compose build
 ```
 
-- `./data:/app/data` (read-write) and `./config:/app/config:ro`.
-- `./.prefect:/var/lib/prefect` with `PREFECT_HOME=/var/lib/prefect`, so Prefect
-  state is never inside `data/`. The directory is created by you as uid 1000 so
-  the container user can write it; a named volume would be root-owned and need
-  an extra `chown`.
-- `DELTA_CROPS_DATA_DIR=/app/data` and `DELTA_CROPS_CONFIG=/app/config/aoi.yaml`
-  are set explicitly: `config.data_dir()` reads `DELTA_CROPS_DATA_DIR` and falls
-  back to `./data`, and `config.config_path()` reads `DELTA_CROPS_CONFIG` and
-  falls back to `config/aoi.yaml`.
-- `restart: unless-stopped`, `init: true`, `stop_grace_period: 30s`.
-- No published ports: the API stays on `127.0.0.1:4200` inside the container, so
-  nothing unauthenticated is exposed on the host. Use `docker compose exec` for
-  `prefect` commands.
-- Healthcheck: `python -m delta_crops.orchestration.healthcheck` (every 60 s,
-  3 retries, 60 s start period). It requires `PREFECT_HOME` to be writable and
-  `GET $PREFECT_API_URL/health` to return `200 true`.
+## Running
+
+```bash
+mkdir -p .prefect
+
+# build with the documented literal ids, never `id -g`
+HOST_UID=1000 HOST_GID=1000 docker compose build
+docker compose up -d
+docker compose ps            # server healthy, then orchestrator healthy
+docker compose logs --tail=40 server orchestrator
+
+# memory: measured, never claimed
+docker stats --no-stream
+
+# the runner must reach the server container, not loopback
+docker compose exec orchestrator prefect deployment ls
+docker compose exec orchestrator prefect deployment inspect \
+  'delta-crops-phase6a/delta-crops-scheduled'
+
+# two rapid runs: global_limit=1 means the second waits
+docker compose exec orchestrator prefect deployment run \
+  'delta-crops-phase6a/delta-crops-scheduled'
+docker compose exec orchestrator prefect deployment run \
+  'delta-crops-phase6a/delta-crops-scheduled'
+docker compose exec orchestrator prefect flow-run ls --limit 5
+
+# manual run of a complete year
+docker compose run --rm orchestrator \
+  python -m delta_crops.orchestration --reprocess-year 2021
+
+# container-side tests (tests/ mounted read-only; pytest from the test stage)
+docker compose --profile test run --rm tests
+docker compose --profile test run --rm tests pytest -q tests/test_orchestration_integration.py
+
+# failure logging: expect non-zero exit and an ERROR naming the bad config
+docker compose run --rm orchestrator \
+  python -m delta_crops.orchestration --data-dir /tmp/dc_smoke \
+  --config /app/config/does_not_exist.yaml; echo "exit=$?"
+
+# smoke on a tmp fixture: never the real lake
+mkdir -p /tmp/dc_smoke
+docker compose run --rm -v /tmp/dc_smoke:/tmp/dc_smoke orchestrator \
+  python -m delta_crops.orchestration --data-dir /tmp/dc_smoke \
+  --config /app/config/aoi.yaml
+cat /tmp/dc_smoke/_logs/pipeline_runs.jsonl
+
+docker compose down
+```
+
+`DELTA_CROPS_DATA_DIR=/app/data` and `DELTA_CROPS_CONFIG=/app/config/aoi.yaml`
+are set explicitly: `config.data_dir()` reads `DELTA_CROPS_DATA_DIR` (fallback
+`./data`) and `config.config_path()` reads `DELTA_CROPS_CONFIG` (fallback
+`config/aoi.yaml`).
+
+Durable Prefect state is `./.prefect` mounted at `/var/lib/prefect` on the
+`server` service only. The runner uses `PREFECT_HOME=/tmp/prefect` (client
+scratch, nothing durable) so two processes never share one SQLite file. No
+ports are published; use `docker compose exec` for Prefect CLI work.
 
 ## The five-day schedule
 
-`python -m delta_crops.orchestration.serve` registers the deployment
-`delta-crops-scheduled` with:
+`serve.py` registers `delta-crops-scheduled` with `interval=timedelta(days=5)`,
+`global_limit=1`, `pause_on_shutdown=True`. It refuses to start without
+`PREFECT_API_URL`, because an ephemeral API has no scheduler.
 
-```python
-scheduled_flow.serve(
-    name="delta-crops-scheduled",
-    interval=timedelta(days=5),
-    global_limit=1,
-    pause_on_shutdown=True,
-    parameters={"data_dir": ..., "config_path": ...},
-)
-```
+- **Anchor:** registration happens on every start, so the interval re-anchors
+  there. The next run is at most five days after the last start. Accepted
+  because runs are idempotent (complete season → `no_op`; in-progress → skips
+  existing assets and verified partitions). A fixed anchor needs an explicit
+  `IntervalSchedule(anchor_date=...)`; future work.
+- **`pause_on_shutdown=True`:** the schedule is paused when the runner stops,
+  so `docker compose stop`/`restart` does not accumulate missed runs; the next
+  start re-registers and resumes.
+- **Concurrency:** `global_limit=1` is enforced by the server, so a second run
+  queues behind the first.
 
-- **Concurrency:** `global_limit=1` means a second run queues until the first
-  finishes. `init: true` reaps child processes; all retry logic is Phase 6a's.
-- **Manual run of a complete year:**
-  `docker compose run --rm orchestrator python -m delta_crops.orchestration --reprocess-year 2021`.
-  A one-off process sharing the same volumes and `PREFECT_HOME`; it writes its
-  own `_logs/pipeline_runs.jsonl` record.
-- **Schedule anchor:** the interval is anchored when the deployment is
-  registered, which happens on every container start. A restart therefore
-  re-anchors the clock, so the next run is at most five days after the last
-  start (never sooner than five days after a run that just completed). This is
-  accepted because every run is idempotent: a completed season is a logged
-  `no_op`, an in-progress season skips existing Bronze assets and verified
-  Silver/Gold partitions. What you observe after a restart is a fresh
-  deployment registration line in the log and the next run scheduled five days
-  out; no duplicate work. A fixed anchor would require creating the schedule
-  explicitly with `IntervalSchedule(anchor_date=...)`, which is future work.
-- **`pause_on_shutdown=True`** (Prefect's default, stated explicitly): the
-  schedule is paused while the API is down, so `docker compose stop` pauses the
-  deployment instead of accumulating missed runs; `docker compose up -d`
-  resumes it on the next start. Setting it to `False` would keep the schedule
-  active during downtime and fire catch-up runs on restart — idempotent, but
-  noisier and unnecessary for a five-day cadence.
+## Tests that pin this
 
-## Container-side tests
+`tests/test_phase6b.py` parses `docker-compose.yml` instead of matching text, so
+the three failure modes above are test failures, not surprises:
 
-`tests/` is excluded from the image, so the `tests` service mounts it read-only
-and uses the `test` stage for pytest (the runtime image cannot import pytest):
+- `test_compose_runs_a_real_prefect_server_for_the_scheduler`
+- `test_compose_healthcheck_probes_the_api_each_service_uses`
+- `test_compose_runner_does_not_use_a_loopback_api_url`
+- `test_serve_refuses_to_start_without_an_api_url`
 
-```bash
-docker compose --profile test run --rm \
-  tests pytest -q -m "not slow and not flow"
-```
+The first three fail on the previous compose file; the fourth fails on the
+previous `serve.py`. Verified by restoring both files from git and re-running.
 
-The real `data/` volume is mounted **read-only** in this service, so a test that
-tries to write the lake fails instead of corrupting it. The flow/integration
-tests can be run explicitly with `-m flow` (they still mock the network).
+## Unverified
 
-## Unverified assumptions
-
-1. `python:3.12-slim` plus the `libexpat1` / `libgomp1` runtime packages are
-   enough for the rasterio, pyarrow and duckdb wheels; confirmed by the smoke
-   import in the acceptance run.
-2. The uv image tag `ghcr.io/astral-sh/uv:0.9` exists and is current enough.
-3. The ephemeral API is reachable at `http://127.0.0.1:4200/api/health` from
-   inside the container.
-4. `prefect flow-run ls` timestamps are fine-grained enough to show that two
-   rapid runs did not overlap.
-5. Container memory is measured by `docker stats --no-stream`; this phase makes
-   no RAM claim.
+1. The uv image tag `ghcr.io/astral-sh/uv:0.9` builds as written (the earlier
+   import check ran from a built image, so this is close to proven).
+2. `prefect server start` with `PREFECT_HOME=./.prefect` creates its SQLite file
+   there and reaches healthy within the 40 s start period on Ahmed's machine.
+3. The runner reaches `http://server:4200/api` over the compose network.
+4. `prefect flow-run ls` timestamps can show the two queued runs did not
+   overlap.
+5. Container memory is whatever `docker stats --no-stream` says; no claim.
