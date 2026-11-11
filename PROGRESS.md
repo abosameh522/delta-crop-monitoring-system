@@ -2,57 +2,55 @@
 
 ## Status
 
-- **Phase:** 6 — orchestration **IN PROGRESS**. 6a closed; 6b implemented, first Docker run
-  FAILED and was fixed from source evidence; awaiting Ahmed's re-run.
-- **Current step:** 6b re-verification. First `docker compose up -d` crash-looped the orchestrator
-  with `httpx.ConnectError` on `http://127.0.0.1:4200/api`; no SQLite file was created.
-- **Root cause (from installed Prefect 3.9.2, not memory):**
-  `prefect/client/orchestration/__init__.py:245-258` starts an ephemeral
-  `SubprocessASGIServer` **only when `PREFECT_API_URL` is empty**; with it set the client just
-  connects and nothing starts. The ephemeral port is random
-  (`prefect/server/api/server.py:1123-1125`, `find_available_port()`), so no healthcheck can pin
-  it. Critically, the scheduler is registered **without** `run_in_ephemeral=True`
-  (`prefect/server/services/scheduler.py:212-215`, filtered by
-  `prefect/server/services/perpetual_services.py:78-92`), and
-  `prefect/runner/runner.py:383-386` warns that schedules cannot run on an ephemeral server —
-  so removing the variable would have made the schedule silently dead instead of crashing.
-  Fix: run a real `prefect server start` and point the runner at it.
-- **6b layout now:** `server` service = `prefect server start --host 0.0.0.0 --port 4200 --no-ui`
-  with `./.prefect:/var/lib/prefect` (scheduler + SQLite); `orchestrator` service =
-  `python -m delta_crops.orchestration.serve` with `PREFECT_API_URL=http://server:4200/api`,
-  `PREFECT_HOME=/tmp/prefect` (client scratch only, never shared SQLite),
-  `depends_on: server: service_healthy`. `serve.py` now refuses to start without
-  `PREFECT_API_URL` and says why. `tests` profile unchanged, no `PREFECT_API_URL` (its own harness).
-- **Healthcheck semantics:** server = `GET /api/health` 200 `true` + `PREFECT_HOME` writable
-  (process serving + can persist); orchestrator = same health **plus**
-  `GET /api/deployments/name/delta-crops-phase6a/delta-crops-scheduled` unpaused (runner connected
-  and registered). Neither is a heartbeat: a wedged runner with an active deployment still reads
-  healthy. A true heartbeat check is future work.
-- **Build ids:** `ARG UID=1000/GID=1000`, compose `"${HOST_UID:-1000}"`/`"${HOST_GID:-1000}"`.
-  Build with literal 1000; the first build inherited gid 966 from `newgrp docker`, which is why
-  `id -g` must not be used. Documented in README + `docs/phase6b-docker.md`.
-- **Container-suite findings:** the first in-image run reported 9 failures because the test
-  image was stale (built before the compose fix); a rebuild cleared 4 of them. The remaining 5
-  failed with `FileNotFoundError` because they read `Dockerfile`, `.dockerignore` and
-  `docker-compose.yml`, which `.dockerignore` deliberately excludes from the image.
-- **Skip policy (now):** the `test` stage sets `DELTA_CROPS_IN_TEST_IMAGE=1`; a single
-  `host_only` marker skips only the Docker-file tests, with the reason "reads repo files …
-  verified on the host". Skipping never happens because a file is missing: on the host the same
-  tests run and fail for real. `test_only_the_docker_file_tests_are_host_only` pins the exact
-  marked set (6 tests) and `test_dockerfile_sets_the_test_image_marker_only_in_the_test_stage`
-  pins that the variable exists in the `test` stage only.
-- **Tests:** host `150 passed, 1 deselected` (22.94 s); quick loop `139 passed, 12 deselected`
-  (5.63 s); simulated image env (`DELTA_CROPS_IN_TEST_IMAGE=1` on the module) `12 passed,
-  6 skipped`. Expected container result after a rebuild: `133 passed, 6 skipped, 12 deselected`
-  (two new Dockerfile tests since Ahmed's `132 passed, 5 skipped`).
-- **Rule for 6b runs:** rebuild `delta-crops:6b-test` after ANY `src/` change
-  (`HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`); a green container
-  suite proves the package/CLIs in the image, not the compose wiring.
-- **Half-done / NOT DONE:** 6b container verification (build/up/ps/logs/stats/in-container tests)
-  is unverified until Ahmed re-runs. Phase 7+ not started.
-- **Next:** Ahmed rebuilds with `HOST_UID=1000 HOST_GID=1000 docker compose build`,
-  `up -d`, waits 90 s, pastes `ps`, logs, `docker stats --no-stream`, deployment inspect, the two
-  rapid runs, and the container test output. Nothing about containers is claimed working before that.
+- **Phase:** 6 — orchestration **CLOSED** (6a accepted earlier, 6b verified on the host on
+  2026-11-11). Phase 7 not started.
+- **6b measured on the host (Ahmed, rebuilt images with `HOST_UID=1000 HOST_GID=1000`):**
+  container suite `133 passed, 6 skipped, 12 deselected` (139 total) with the 6 skips being the
+  host-only Docker-file tests and their explicit reason;
+  `tests/test_orchestration_integration.py` in the image `1 passed` (~8.5 s, four real CLIs,
+  mocked network); host full suite `150 passed, 1 deselected`; quick loop `139 passed,
+  12 deselected`.
+- **6b memory (idle only):** orchestrator 104 MiB, server 234.5 MiB of 15.33 GiB by
+  `docker stats --no-stream`. Never measured under load; no other RAM claim exists.
+- **6b failure logging:** missing config inside the orchestrator container exits 1 with a
+  `FileNotFoundError` naming the file, before any download. It is a raw traceback, not a friendly
+  message — a polish item, not a blocker.
+- **6b layout (final):** `server` = `prefect server start --host 0.0.0.0 --port 4200 --no-ui`
+  with `./.prefect:/var/lib/prefect` (scheduler + SQLite); `orchestrator` =
+  `python -m delta_crops.orchestration.serve` with `PREFECT_API_URL=http://server:4200/api`
+  and `PREFECT_HOME=/tmp/prefect` (client scratch, never a shared SQLite);
+  `depends_on: server: service_healthy`; `tests` profile mounts `tests/` and the real lake
+  read-only and sets no `PREFECT_API_URL` (its harness starts its own server).
+- **Why a real server (source, Prefect 3.9.2):** `get_client` starts an ephemeral
+  `SubprocessASGIServer` only when `PREFECT_API_URL` is empty
+  (`prefect/client/orchestration/__init__.py:245-258`), its port is random
+  (`prefect/server/api/server.py:1123-1125`), and the scheduler is not registered for ephemeral
+  servers (`prefect/server/services/scheduler.py:212-215` + `perpetual_services.py:78-92`), which
+  `prefect/runner/runner.py:383-386` warns about. The first compose version therefore crash-looped
+  and, had we only removed the variable, would have left a silently dead schedule.
+- **Healthchecks:** API answers, and for the runner the deployment exists and is unpaused. They
+  are **not** a heartbeat: a wedged runner with a registered deployment still reads healthy.
+- **Not proven / open from 6b:** container concurrency (`global_limit=1` is configured and visible;
+  `no_op` runs last ~0.3 s so the in-container attempt was inconclusive — only the local spike
+  proves the ordering); a real-pipeline smoke inside the container (deliberately skipped, see
+  caution below); `uv` image tag is minor-pinned (`ghcr.io/astral-sh/uv:0.9`), not digest-pinned.
+- **Caution recorded:** never run `python -m delta_crops.orchestration` with the default config
+  against an empty/unfamiliar `--data-dir`; it starts a real multi-year ingest. Use a tiny fixture
+  config, the exit-code tests, or a nonexistent config for failure checks. One real example:
+  manual run `copper-mussel` CRASHED after ~1.5 h (interrupted) after starting ~5.7 GB of ingest;
+  `beneficial-silkworm` FAILED in 47 ms on the missing-config check. Both are manual-run side
+  effects, not schedule failures; the scheduled deployment was healthy (3 future SCHEDULED runs,
+  one manual `no_op` COMPLETED). The real ledger stayed at 1727 lines, git stayed clean, and
+  `data/_logs/pipeline_runs.jsonl` held only the two `no_op` records.
+- **Test-image rule:** rebuild `delta-crops:6b-test` after ANY `src/` change
+  (`HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`). A 4-hour-old image
+  executed pre-fix code and reported 9 failures (5 missing repo files, 4 from old code); after the
+  rebuild only the 5 repo-file tests failed, which produced the host-only skip policy (`dc171f9`).
+  A green container suite proves the package/CLIs in the image, not the compose wiring.
+- **Still open at Phase 6 close:** `--adopt` has not been run on the real Silver/Gold (legacy
+  outputs keep their unproven provenance); the flow has never run on real data — the schedule is a
+  `no_op` until a new year (e.g. 2027) is added to the config; container concurrency unproven;
+  healthcheck is not a heartbeat; uv image tag minor-pinned.
 
 - **6a base (accepted):** four tasks calling the real CLI `main()` in-process
   (ingest → Silver → quality → Gold), only exit 3 retried (1/2/4 s), `PipelineError` otherwise,
@@ -77,7 +75,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 3 | Bronze → Silver (cleaning) | DONE | 293/293 dates built; 39 tests passed; revised within-orbit test 7 passes both groups. Earlier failures and post-hoc qualification retained in D-035. |
 | 4 | Data quality | DONE | All 293 ledger dates / 70,116,072 rows passed critical checks; 58 tests pass; corruption CLI exit 1; DN audit and D-036 onward documented. |
 | 5 | Gold layer | DONE | Weekly gate passed (max 27.54%), anomaly leave-one-out, heatwave ≥40°C/≥3d, orbit cache + diagnostic. 7 new tests; 65 total pass. |
-| 6 | Orchestration | IN PROGRESS | 6a accepted. 6b: first run failed (ephemeral API assumption), fixed to a real server + runner; awaiting container re-verification. |
+| 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Open: `--adopt`, real-data run, container concurrency, heartbeat, uv tag pin. |
 | 7 | Modeling | TODO | Baseline computed from training years only |
 | 8 | Dashboard | TODO | |
 | 9 | Packaging and documentation | TODO | |

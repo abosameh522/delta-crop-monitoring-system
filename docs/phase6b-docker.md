@@ -154,20 +154,70 @@ the three failure modes above are test failures, not surprises:
 The first three fail on the previous compose file; the fourth fails on the
 previous `serve.py`. Verified by restoring both files from git and re-running.
 
-## Unverified
+## Measured results
 
-1. The uv image tag `ghcr.io/astral-sh/uv:0.9` builds as written (the earlier
-   import check ran from a built image, so this is close to proven).
-2. `prefect server start` with `PREFECT_HOME=./.prefect` creates its SQLite file
-   there and reaches healthy within the 40 s start period on Ahmed's machine.
-3. The runner reaches `http://server:4200/api` over the compose network.
-4. `prefect flow-run ls` timestamps can show the two queued runs did not
-   overlap.
-5. Container memory is whatever `docker stats --no-stream` says; no claim.
+Run by Ahmed on the host on 2026-11-11, from the rebuilt images
+(`HOST_UID=1000 HOST_GID=1000`):
+
+| Check | Measured |
+| --- | --- |
+| Container suite, `tests` profile | `133 passed, 6 skipped, 12 deselected` |
+| The 6 skips | the host-only Docker-file tests, each with the explicit reason string |
+| `tests/test_orchestration_integration.py` in the image | `1 passed` in ~8.5 s (four real CLIs, mocked network) |
+| Host full suite / quick loop | `150 passed, 1 deselected` / `139 passed, 12 deselected` |
+| Idle memory (`docker stats --no-stream`) | orchestrator 104 MiB, server 234.5 MiB of 15.33 GiB — **idle only, not under load** |
+| Failure logging | missing config → exit 1 and `FileNotFoundError` naming the file, before any download; it is a raw traceback, not a friendly message (polish item, not a blocker) |
+| Scheduled deployment | healthy: 3 future SCHEDULED runs, one manual `no_op` run COMPLETED |
+
+The container suite total is **139** (133 passed + 6 skipped), not 137.
+
+## Not proven
+
+- **Two concurrent runs not overlapping inside the container.** `global_limit=1`
+  is configured and visible in Prefect, but the container attempt was
+  inconclusive: `no_op` runs last about 0.3 s, too short to observe queueing.
+  The behaviour is proven only by the local Phase 6a spike.
+- **A real-pipeline smoke inside the container.** Deliberately not done: the
+  default config covers 2019–2023, so running the pipeline on an empty data dir
+  starts a real multi-year ingest. It happened once by mistake (below). Revisit
+  only with a dedicated mini fixture and config.
+- **A heartbeat check.** The healthchecks prove the API answers and that the
+  deployment is registered and unpaused. A wedged runner with a registered
+  deployment would still read healthy.
+
+> **Caution:** never run `python -m delta_crops.orchestration` with the default
+> config against an empty or unfamiliar `--data-dir`. Use a tiny fixture config,
+> the exit-code tests, or a nonexistent config when checking failure logging.
+
+## Manual runs and the Prefect UI
+
+Manual runs from the `orchestrator` container register on the real server
+(`PREFECT_API_URL` points at it), so they appear in the UI and history — and
+they appear as `FAILED`/`CRASHED` when they fail or are interrupted. That is
+expected, not a schedule problem. Real examples from the first session:
+
+- `beneficial-silkworm` — `FAILED` in 47 ms: the `does_not_exist.yaml`
+  failure-logging check (`data_dir=/tmp/dc_smoke`,
+  `config_path=/app/config/does_not_exist.yaml`).
+- `copper-mussel` — `CRASHED` ("aborted by an interrupt signal") after about
+  1.5 hours: `--data-dir /tmp/dc_smoke` with the real multi-year config, which
+  started a genuine ~5.7 GB ingest until it was stopped with Ctrl-C.
+
+Neither is a schedule failure; the scheduled deployment stayed healthy. After
+these runs `data/bronze/_logs/ingestion_log.jsonl` was still 1727 lines, git
+status was clean, and `data/_logs/pipeline_runs.jsonl` held only the two `no_op`
+records.
+
+## Still unverified
+
+1. The uv image tag `ghcr.io/astral-sh/uv:0.9` is minor-pinned, not
+   digest-pinned.
+2. `prefect flow-run ls` timestamps are fine-grained enough to prove
+   non-overlap (untested for the reason above).
 
 ## Container-side tests: what they can and cannot cover
 
-- **Host-only tests skip inside the image.** Five (now six) tests parse
+- **Host-only tests skip inside the image.** Six tests parse
   `Dockerfile`, `.dockerignore` and `docker-compose.yml`, and those files are
   deliberately not in the image (`.dockerignore` drops them). The `test` stage
   sets `DELTA_CROPS_IN_TEST_IMAGE=1` and those tests carry one `host_only`
@@ -181,8 +231,10 @@ previous `serve.py`. Verified by restoring both files from git and re-running.
   `HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`
   before `docker compose --profile test run --rm tests`. The image copies the
   source at build time; running a stale `delta-crops:6b-test` executes old code.
-  This happened once: a test image built before the compose fix reported 9
-  failures that the current tree did not have.
+  This happened once: the test image was 4 hours old when first run, so it
+  executed pre-fix code and reported 9 failures (5 missing repo files, 4 from
+  old code). After a rebuild only the 5 repo-file tests failed, which led to the
+  host-only skip policy in `dc171f9`.
 - **A green container suite is not proof of the compose wiring.** It proves the
   Python package, the CLIs and the Prefect client work inside the image. It does
   not prove that `server` and `orchestrator` start, reach each other, register

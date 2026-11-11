@@ -83,6 +83,18 @@ Notes on the container suite:
 - Tests that read `Dockerfile`/`.dockerignore`/`docker-compose.yml` are host-only
   and report as skipped inside the image, with a reason. A green container suite
   proves the package and CLIs work in the image, not that the compose wiring does.
+- Measured: container suite `133 passed, 6 skipped, 12 deselected`; integration
+  test in the image `1 passed`; idle memory orchestrator 104 MiB, server
+  234.5 MiB (idle only, not under load).
+- **Not proven:** two container runs not overlapping. `global_limit=1` is set,
+  but `no_op` runs last ~0.3 s, so the in-container attempt was inconclusive.
+- The healthchecks prove the API answers and the deployment is registered and
+  unpaused — not a heartbeat.
+- **Never** run `python -m delta_crops.orchestration` with the default config
+  against an empty or unfamiliar `--data-dir`: it starts a real multi-year
+  ingest. Use a tiny fixture config or a nonexistent config (failure checks).
+- Manual runs appear in the Prefect UI as `FAILED`/`CRASHED` when they fail or
+  are interrupted; that is expected, not a schedule problem.
 
 ## Layout
 
