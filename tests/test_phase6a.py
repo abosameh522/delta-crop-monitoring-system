@@ -3,7 +3,7 @@
 import json
 from copy import deepcopy
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -22,17 +22,14 @@ from delta_crops.errors import (
     to_exit_code,
 )
 from delta_crops.ingestion import bronze
-from delta_crops.ingestion.earth_search import Scene, baseline_key, select_best
+from delta_crops.ingestion.earth_search import baseline_key
 from delta_crops.ingestion.weather import DAILY_VARIABLES, validate_payload
 from delta_crops.orchestration.steps import append_run_log, is_complete_season, week_status
 from delta_crops.quality.checks import EXPECTED_SCHEMA
+from delta_crops.transform.bronze_reader import assets_for_date
 from delta_crops.transform.silver import ndvi_path
 
 CONFIG = load_config()
-
-
-def _scene(item_id: str, baseline: str, tile: str = "36RTV") -> Scene:
-    return Scene(item_id, tile, datetime(2023, 1, 1), tuple(int(x) for x in baseline.split(".")), 0, {}, False)
 
 
 def _raise(exc: BaseException):
@@ -175,8 +172,50 @@ def test_gold_weekly_gate_failure_maps_to_11(monkeypatch, tmp_path):
 # ─── Core logic ───
 
 
-def test_select_best_keeps_highest_baseline_and_item_id_tiebreak():
-    assert select_best([_scene("b", "5.0"), _scene("a", "10.0")])[0].item_id == "a"
+def test_assets_for_date_selects_highest_baseline_then_item_id(tmp_path):
+    """assets_for_date itself picks the winner that Silver will read."""
+    root = tmp_path / "lake"
+    ledger: dict[str, dict] = {}
+
+    def add(item_id: str, tile: str, band: str, baseline: str) -> None:
+        path = root / "bronze" / "assets" / tile / f"{item_id}_{band}.tif"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"{item_id}:{band}".encode())
+        record = {
+            "asset_key": f"{item_id}:{band}",
+            "source": "earth-search",
+            "acquired_at": "2023-05-01T08:41:00Z",
+            "tile": tile,
+            "band": band,
+            "path": str(path.relative_to(root)),
+            "bytes": path.stat().st_size,
+            "item_id": item_id,
+            "processing_baseline": baseline,
+        }
+        ledger[record["asset_key"]] = record
+
+    # Higher baseline must win over a lexically larger "5.0" vs numeric "10.0".
+    add("S2A_36RTV_old", "36RTV", "B04", "5.0")
+    add("S2A_36RTV_new", "36RTV", "B04", "10.0")
+    for band in ("B08", "SCL"):
+        add(f"S2A_36RTV_{band}", "36RTV", band, "10.0")
+
+    # Equal baselines fall back to the larger item_id.
+    add("S2A_36RUV_dup", "36RUV", "B04", "5.0")
+    add("S2B_36RUV_dup", "36RUV", "B04", "5.0")
+    for band in ("B08", "SCL"):
+        add(f"S2B_36RUV_{band}", "36RUV", band, "5.0")
+
+    # A tile with one record per band is untouched by the selection.
+    for band in ("B04", "B08", "SCL"):
+        add(f"S2A_36RTU_only_{band}", "36RTU", band, "5.0")
+
+    tiles, problems = assets_for_date(ledger, root, date(2023, 5, 1), verify_checksum=False)
+
+    assert problems == []
+    assert tiles["36RTV"]["B04"].item_id == "S2A_36RTV_new"
+    assert tiles["36RUV"]["B04"].item_id == "S2B_36RUV_dup"
+    assert tiles["36RTU"]["B04"].item_id == "S2A_36RTU_only_B04"
 
 
 def test_processing_baseline_version_order_10_0_above_5_0():
