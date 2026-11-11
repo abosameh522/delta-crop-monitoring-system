@@ -1,4 +1,4 @@
-"""Corrupt a disposable full Silver copy, never the real lake; prove CLI exit 1."""
+"""Corrupt a disposable full Silver copy, never the real lake; prove CLI exit 10."""
 from __future__ import annotations
 
 import hashlib

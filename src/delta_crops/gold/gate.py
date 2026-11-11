@@ -19,12 +19,11 @@ import duckdb
 import pyarrow as pa
 
 from delta_crops.config import Config, require_gold
+
+#: Re-exported contract exception: there is exactly one definition, in errors.py.
+from delta_crops.errors import WeeklyGateFailure  # noqa: F401
 from delta_crops.gold.weekly import iso_week_start, season_weeks
 from delta_crops.transform.bronze_reader import imagery_dates, load_ledger
-
-
-class WeeklyGateFailure(RuntimeError):
-    """Raised when a season's weekly NULL share exceeds the configured gate."""
 
 
 def weekly_gate(root: Path, config: Config, write: bool = True) -> dict:

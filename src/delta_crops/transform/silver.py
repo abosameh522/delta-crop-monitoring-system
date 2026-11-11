@@ -16,6 +16,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Iterable
 
+import duckdb
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -324,13 +325,14 @@ def build(
             summary["errors"].append(f"{day}: LedgerError: {exc}")
             print(f"[{index}/{len(dates)}] {day} FAILED LedgerError: {exc}", flush=True)
             continue
-        except Exception as exc:  # noqa: BLE001 - check for transient errors
-            if isinstance(exc, (TransientFailure,)):
-                raise
-            # Check for DuckDB lock or other transient errors
+        except TransientFailure:
+            raise
+        except duckdb.IOException as exc:
+            # Real DuckDB file-lock conflict verified as _duckdb.IOException
+            # ("Could not set lock on file ...") in duckdb 2.0.0.
+            raise TransientFailure(f"DuckDB I/O failure on {day}") from exc
+        except Exception as exc:  # noqa: BLE001 - any other per-date failure is a failed date
             exc_name = type(exc).__name__
-            if "lock" in str(exc).lower() or "database is locked" in str(exc).lower():
-                raise TransientFailure(f"DuckDB lock on {day}") from exc
             summary["failed"] += 1
             summary["errors"].append(f"{day}: {exc_name}: {exc}")
             print(f"[{index}/{len(dates)}] {day} FAILED {exc_name}: {exc}", flush=True)

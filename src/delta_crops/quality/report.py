@@ -6,9 +6,8 @@ import math
 import os
 from pathlib import Path
 
-
-class QualityFailure(RuntimeError):
-    """One or more critical checks failed; the JSON report has already been saved."""
+#: Re-exported contract exception: there is exactly one definition, in errors.py.
+from delta_crops.errors import QualityFailure  # noqa: F401
 
 
 def _json_safe(value):

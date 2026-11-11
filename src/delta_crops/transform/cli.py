@@ -207,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from delta_crops.errors import SilverDateFailure
+    from delta_crops.errors import SilverDateFailure, TransientFailure
     try:
         args = build_parser().parse_args(argv)
     except SystemExit as exc:
@@ -216,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.data_dir) if args.data_dir else data_dir()
     try:
         return args.func(args, config, root)
+    except TransientFailure as exc:
+        print(f"Transient failure: {exc}")
+        return 3
     except SilverDateFailure as exc:
         print(f"Silver date failure: {exc}")
         return 4

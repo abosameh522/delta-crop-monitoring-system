@@ -1,5 +1,9 @@
 """Stable command exit contract exceptions.
 
+These are the ONLY definitions of the contract exceptions. Modules that
+historically owned a copy (``quality.report``, ``gold.gate``) re-export these
+names so existing imports keep working.
+
 Exit codes:
   0  success
   1  unexpected error
@@ -10,24 +14,34 @@ Exit codes:
   11 WeeklyGateFailure (Gold gate exceeded) — not retryable
 """
 
+
 class TransientFailure(RuntimeError):
     """Truly transient errors: network, STAC API timeout, DuckDB lock."""
+
     exit_code = 3
+
 
 class AssetFailure(RuntimeError):
     """One or more Bronze assets failed to download after retries."""
+
     exit_code = 4
+
 
 class SilverDateFailure(RuntimeError):
     """One or more Silver dates failed to process."""
+
     exit_code = 4
+
 
 class QualityFailure(RuntimeError):
     """Critical Silver quality check failed."""
+
     exit_code = 10
+
 
 class WeeklyGateFailure(RuntimeError):
     """Gold weekly NULL share exceeded the configured cap."""
+
     exit_code = 11
 
 

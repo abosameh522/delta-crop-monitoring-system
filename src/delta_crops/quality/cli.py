@@ -10,11 +10,11 @@ from delta_crops.quality.checks import run_quality
 from delta_crops.quality.report import QualityFailure
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--config", type=Path, default=None)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         path = run_quality(args.data_dir or data_dir(), load_config(args.config))
     except QualityFailure as error:

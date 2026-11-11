@@ -171,7 +171,7 @@ def cmd_verify(args: argparse.Namespace, config: Config, root: Path) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     from delta_crops.errors import WeeklyGateFailure
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=None)
@@ -184,7 +184,7 @@ def main() -> int:
         if name == "orbits":
             command.add_argument("--refresh", action="store_true")
             command.add_argument("--diagnose", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     root = args.data_dir or data_dir()
     config = load_config(args.config)
     handler = {
