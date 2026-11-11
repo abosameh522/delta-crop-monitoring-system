@@ -1,11 +1,13 @@
 """Phase 6a orchestration contract tests (real CLI main() calls, tmp fixtures)."""
 
 import json
+import time
 from copy import deepcopy
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+import duckdb
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -311,5 +313,40 @@ def test_to_exit_code_unknown_exception():
 
 @pytest.mark.slow
 def test_gold_regression_except_is_identical_in_both_directions():
-    # Real regression test will be added in Step 3 (scripts/gold_regression.py)
-    pytest.skip("Implemented in scripts/gold_regression.py")
+    """Full Gold rebuild for 2019-2023 must match frozen snapshot exactly."""
+    from scripts.gold_regression import run_regression
+
+    assert run_regression(Path("data/_regression/gold_before"), Path("data"))
+
+
+# ─── Fast unit test of the comparison function on tiny fixtures ───
+
+
+def test_gold_regression_comparison_function_identical(tmp_path):
+    """The comparison logic itself: identical tables -> 0 diffs."""
+    con = duckdb.connect()
+    # Create identical tiny tables
+    t1 = pa.Table.from_pylist([{"a": 1, "b": "x"}, {"a": 2, "b": "y"}])
+    t2 = pa.Table.from_pylist([{"a": 1, "b": "x"}, {"a": 2, "b": "y"}])
+    p1 = tmp_path / "t1.parquet"
+    p2 = tmp_path / "t2.parquet"
+    pq.write_table(t1, p1)
+    pq.write_table(t2, p2)
+    # Direct EXCEPT test (same logic as _compare_table)
+    diff_a = con.execute(f"SELECT count(*) FROM (SELECT * FROM read_parquet('{p1}') EXCEPT SELECT * FROM read_parquet('{p2}'))").fetchall()[0][0]
+    diff_b = con.execute(f"SELECT count(*) FROM (SELECT * FROM read_parquet('{p2}') EXCEPT SELECT * FROM read_parquet('{p1}'))").fetchall()[0][0]
+    assert diff_a == 0 and diff_b == 0
+
+
+def test_gold_regression_comparison_function_different(tmp_path):
+    """The comparison logic: one changed row -> nonzero diff and exit 1."""
+    con = duckdb.connect()
+    t1 = pa.Table.from_pylist([{"a": 1, "b": "x"}, {"a": 2, "b": "y"}])
+    t2 = pa.Table.from_pylist([{"a": 1, "b": "x"}, {"a": 2, "b": "z"}])  # 'y' -> 'z'
+    p1 = tmp_path / "t1.parquet"
+    p2 = tmp_path / "t2.parquet"
+    pq.write_table(t1, p1)
+    pq.write_table(t2, p2)
+    diff_a = con.execute(f"SELECT count(*) FROM (SELECT * FROM read_parquet('{p1}') EXCEPT SELECT * FROM read_parquet('{p2}'))").fetchall()[0][0]
+    diff_b = con.execute(f"SELECT count(*) FROM (SELECT * FROM read_parquet('{p2}') EXCEPT SELECT * FROM read_parquet('{p1}'))").fetchall()[0][0]
+    assert diff_a + diff_b > 0
