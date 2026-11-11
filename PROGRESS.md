@@ -3,13 +3,14 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Step 4 missing-fingerprint/adoption evidence verified on tmp fixtures; awaiting acceptance. Step 5 NOT started.
-- **Done this session:** Fixed comparison against empty assets; 6 Silver fingerprint tests pass on temporary fixtures, including unchanged skip and one-date-only rebuild. Corrected regression script so anomaly reads temporary rebuilt weekly data. No real ingestion, backfill or Silver rebuild.
-- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, Gold per-output fingerprints, per-year partial-season as_of wired into Gold, partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
-- **Tests:** default 93 passed, 1 slow deselected, 3 strict xfailed (Gold fingerprint and two task-retry tests), 4.87s; slow 1 passed, 96 deselected, 49.41s. 97 total, not the earlier promised 84. No unexpected failing tests. A prior default run emitted a Prefect shutdown logging error; helper test now uses task.fn to avoid starting an ephemeral server.
-- **Regression:** rebuild 41.67s / total comparison 48.91s; all 15 table/year comparisons have identical rows and zero EXCEPT differences both ways. Snapshot unchanged; outputs only in TemporaryDirectory.
-- **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs. A 02:14:44.456091–02:14:47.456425 UTC; B 02:15:14.854044–02:15:17.854678 UTC on 2026-11-11. No overlap. PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
-- **Next:** Step 4 acceptance pending. Normal unfingerprinted skip bypasses Bronze checks; adoption requires verified SHA-256 and leaves Parquet hash unchanged, including after a rejected corrupt-input attempt. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
+- **Current step:** Step 5 (per-year Gold `as_of`, `not_yet_observed`, complete-season baselines) implemented and verified; awaiting acceptance. Step 6 NOT started.
+- **Done this session:** Step 5 — `gold/as_of.py` derives each year's cut-off from config + Silver (no wall clock); weekly NDVI and weekly weather honour it; anomaly propagates `not_yet_observed` and admits only complete seasons into baselines. Regression unchanged 15/15.
+- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, Gold per-output fingerprints (Step 6), partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
+- **Tests:** default 103 passed, 1 slow deselected, 3 strict xfailed, 3.12s; slow 1 passed, 106 deselected, 43.47s. 107 total. No unexpected failing tests.
+- **Regression:** final run 43.21s total (build 37.11s); all 15 table/year comparisons identical, zero EXCEPT differences both ways. First run after Step 5a was also 15/15. Snapshot unchanged; outputs only in TemporaryDirectory.
+- **Step 5 behaviour:** complete season (season end present + all 153 weather days) -> `as_of` = config season end; in-progress -> `min(last Silver acquisition date, last weather date, season end)`; week evaluated only when its Sunday <= `as_of`. In-progress outputs rebuild each run; complete-year skips stay. Gold fingerprints (Step 6) will cover as_of changes.
+- **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs, no overlap (02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11). PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
+- **Next:** Step 5 acceptance pending. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
