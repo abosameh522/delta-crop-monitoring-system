@@ -111,3 +111,95 @@ always RasterioIOError -> 3 calls, no final/tmp/ledger, failed summary printed;
 one failed asset does not stop others and CLI `main()` returns 4; write
 exception leaves no tmp/ledger; CRSError -> 1 call; scheduled re-run -> 0 reads
 and 0 downloads.
+
+
+## Step 8 — the real four-task flow
+
+`delta_crops.orchestration.flow` holds the Prefect 3 flow and the retry
+contract; `delta_crops.orchestration.pipeline` holds the four tasks and the
+scheduled entry logic. Tasks call each CLI `main()` **in-process**. In-process
+calls keep the stable integer exit contract, avoid a Python interpreter start per
+task, and let tests monkeypatch the CLI mains directly.
+
+### Retry mapping
+
+| CLI exit | Meaning | Task behaviour |
+| --- | --- | --- |
+| 0 | success | continue |
+| 3 | transient (`TransientFailure`) | raise `TransientError`; Prefect retries |
+| 4 | asset / Silver date failure | `PipelineError`; no retry |
+| 10 | critical quality failure | `PipelineError`; no retry |
+| 11 | Gold weekly gate failure | `PipelineError`; no retry |
+| 1 / other | unexpected | `PipelineError`; no retry |
+
+`retry_codes()` returns exactly `{3}`. Retries use Prefect 3.9.2's verified
+`retry_condition_fn(task, task_run, state)`: the condition checks
+`state.data` for `TransientError`. Defaults are 3 retries with 1/2/4 s
+exponential delays (`ingestion`-style backoff is separate); tests pass
+`retry_delays=[0, 0, 0]`. The quality task is `retries=0` unconditionally.
+
+Task order is ingest -> Silver -> quality -> Gold. A raised task stops the flow,
+so Silver failure skips quality and Gold, and quality failure skips Gold.
+
+### Scheduled selection and no-op
+
+`in_progress_years()` reads `gold.as_of.season_states` for every configured
+season. A season is complete only when every configured weather day is present
+and the season end has passed. Scheduled mode processes **only** incomplete
+years. With none (today: 2019–2023 are complete) the run is an explicit logged
+no-op with `status=no_op`; adding a future season such as 2027 to
+`seasons.years` makes it the scheduled year automatically. Complete years are
+touched only with the explicit `reprocess_year` flow parameter (CLI:
+`python -m delta_crops.orchestration --reprocess-year 2021`).
+
+### Partial weather
+
+The flow computes the in-progress years and passes
+`--allow-partial-weather-year YEAR` to ingestion for exactly those years.
+`bronze.ingest_weather(..., allow_partial=True)` stores a short Open-Meteo
+response with `weather_status=partial` and returns `"partial"`; that is
+non-blocking and appears as `ingest.weather[year] = "partial"` in the run log.
+A complete year is always fetched with `allow_partial=False`, so a short
+response fails the ingest task. A partial weather file is refreshed on the next
+scheduled run instead of being skipped.
+
+### Run log
+
+Every run appends one record to `<data-dir>/_logs/pipeline_runs.jsonl` in a
+`try/finally`, including failures (`status=failed` plus an ERROR log line).
+Fields: `run_id`, `start_utc`, `end_utc`, `status`, `years`, `as_of` per year,
+`tasks` (status + exit code per task), `ingest` (new / skipped / bytes /
+weather), `silver` (built / skipped / rebuilt_due_to_input_change /
+unfingerprinted / failed), `quality` (status and failed checks), `gold` (per
+table counts), `gold_verify`, `weekly_verify`, `duration_s`.
+
+The CLI writes a small JSON summary (`--summary-json`) next to the run log
+(`_logs/task_summaries/`); the flow reads it back. If a summary is missing (for
+example a mocked CLI in a test) the task still records its exit code.
+
+### Scheduled checksums vs weekly verification
+
+Scheduled ingestion passes `--no-checksum` and Silver passes
+`--no-verify-checksum`: both trust the ledger plus file size, so a re-run does
+no re-hashing. The separate `weekly_verify_flow` runs the ingestion `verify`
+command for every configured year with full SHA-256 checking and writes its own
+run-log record (`weekly_verify=ok|failed`). This keeps the fast scheduled path
+fast while a weekly job still proves Bronze integrity.
+
+### Failure caveat from Step 7
+
+An `OSError` from a Bronze write (for example a full disk) is a failed asset
+(exit 4), not transient. It requires manual intervention (free space, then
+re-run); the task will not retry it.
+
+### Evidence tests
+
+`tests/test_orchestration_flow.py` uses `prefect_test_harness` with every CLI
+main monkeypatched and a temporary `--data-dir`: all-zero success and run log;
+ingest 3, 3, 0 retried success; ingest 4 not retried with Silver/quality/Gold
+never called; quality 10 not retried with Gold never called; Silver 3 always
+exhausts 1 + 3 attempts; no in-progress year logs a no-op; failure run log
+fields; explicit reprocess year; weekly verify flow; and a real ingestion CLI
+summary consumed by the flow (including `partial` weather). `tests/test_ingestion.py`
+adds a real partial-weather store/refresh test and the CLI flag wiring test.
+No test touches real data or a live Prefect server.
