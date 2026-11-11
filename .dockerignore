@@ -1,0 +1,32 @@
+# The data lake is host state, never image content.
+data/
+
+# Local environment and VCS metadata.
+.venv/
+.git/
+.gitignore
+.prefect/
+.prefect-test/
+
+# Python and test caches / build artifacts.
+**/__pycache__/
+**/*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets.
+.env
+
+# Not needed at runtime; keeps the image small and the context fast.
+tests/
+docs/
+assets/
+dags/
+scripts/
+*.parquet
+*.tif
+*.parquet.fingerprint.json
