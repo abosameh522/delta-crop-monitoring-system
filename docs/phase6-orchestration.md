@@ -183,7 +183,10 @@ Scheduled ingestion passes `--no-checksum` and Silver passes
 `--no-verify-checksum`: both trust the ledger plus file size, so a re-run does
 no re-hashing. The separate `weekly_verify_flow` runs the ingestion `verify`
 command for every configured year with full SHA-256 checking and writes its own
-run-log record (`weekly_verify=ok|failed`). This keeps the fast scheduled path
+run-log record (`weekly_verify=ok|failed`). In the main pipeline record,
+`weekly_verify` is the Gold verification status and `gold_verify` holds its
+summary; in the separate flow the same `weekly_verify` field reports the Bronze
+checksum result. This keeps the fast scheduled path
 fast while a weekly job still proves Bronze integrity.
 
 ### Failure caveat from Step 7
