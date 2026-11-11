@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -415,3 +416,53 @@ def test_scheduled_rerun_skips_from_ledger_and_size_without_downloading(tmp_path
     )
     assert second["skipped"] == 1 and second["downloaded"] == 0
     assert calls == []
+
+
+# ─── Phase 6a step 8: partial weather for an in-progress season ───
+
+
+def test_in_progress_weather_partial_is_stored_and_non_blocking(tmp_path, monkeypatch):
+    config = replace(CONFIG, seasons=replace(CONFIG.seasons, years=(2027,), focus=2027))
+    payload = {"daily": {"time": ["2027-05-01"], **{v: [1.0] for v in weather.DAILY_VARIABLES}}}
+    monkeypatch.setattr(weather, "fetch_daily", lambda *a, **k: payload)
+
+    assert bronze.ingest_weather(config, 2027, tmp_path, allow_partial=True) == "partial"
+    record = bronze.latest_records(bronze.read_records(bronze.log_path(tmp_path)))["weather:2027"]
+    assert record["weather_status"] == "partial"
+    assert (tmp_path / "bronze" / "weather" / "year=2027" / "open_meteo_daily.json").is_file()
+
+    # A complete year must still return every configured day.
+    with pytest.raises(ValueError):
+        bronze.ingest_weather(config, 2027, tmp_path, allow_partial=False)
+
+
+def test_ingest_cli_wires_partial_weather_only_for_listed_year(tmp_path, monkeypatch):
+    from delta_crops.ingestion import cli
+
+    seen: dict[int, bool] = {}
+    monkeypatch.setattr(cli, "search_scenes", lambda **kwargs: [])
+    monkeypatch.setattr(
+        bronze,
+        "ingest_scenes",
+        lambda **kwargs: {"downloaded": 0, "skipped": 0, "failed": 0, "bytes": 0, "failed_assets": []},
+    )
+
+    def fake_weather(config, year, root, allow_partial=False):
+        seen[year] = allow_partial
+        return "partial" if allow_partial else "downloaded"
+
+    monkeypatch.setattr(bronze, "ingest_weather", fake_weather)
+    summary = tmp_path / "summary.json"
+    code = cli.main([
+        "--data-dir", str(tmp_path), "ingest", "--year", "2027",
+        "--allow-partial-weather-year", "2027", "--summary-json", str(summary),
+    ])
+
+    assert code == 0
+    assert seen == {2027: True}
+    data = json.loads(summary.read_text())
+    assert data["weather"] == {"2027": "partial"}
+
+    seen.clear()
+    assert cli.main(["--data-dir", str(tmp_path), "ingest", "--year", "2023"]) == 0
+    assert seen == {2023: False}

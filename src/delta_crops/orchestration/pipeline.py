@@ -219,13 +219,13 @@ def run_pipeline(
         return {"status": "no_op", "years": [], "run_id": record["run_id"], "run_log": str(root / "_logs" / "pipeline_runs.jsonl")}
 
     record["in_progress_year"] = years[0] if scheduled else None
-    record["as_of"] = _record_as_of(root, config, years)
-    states = season_states(root, config, years)
-    allow_partial_years = [year for year in years if not states[year].complete]
-
-    ingest_task, silver_task, quality_task, gold_task = _make_tasks(retries, delays)
     current = "ingest"
     try:
+        record["as_of"] = _record_as_of(root, config, years)
+        states = season_states(root, config, years)
+        allow_partial_years = [year for year in years if not states[year].complete]
+
+        ingest_task, silver_task, quality_task, gold_task = _make_tasks(retries, delays)
         record["tasks"]["ingest"] = {"status": "running", "exit_code": None}
         ingest = ingest_task(data_dir, config_path, years, allow_partial_years)
         record["ingest"] = ingest
