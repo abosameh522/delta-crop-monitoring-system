@@ -31,11 +31,23 @@
 - **Build ids:** `ARG UID=1000/GID=1000`, compose `"${HOST_UID:-1000}"`/`"${HOST_GID:-1000}"`.
   Build with literal 1000; the first build inherited gid 966 from `newgrp docker`, which is why
   `id -g` must not be used. Documented in README + `docs/phase6b-docker.md`.
-- **Tests:** `tests/test_phase6b.py` parses compose YAML (not text) and the three container
-  failure modes fail there: real-server presence, healthcheck URL matching each service's
-  `PREFECT_API_URL`, runner not on loopback, plus `serve` refusing an ephemeral API. Verified by
-  restoring the previous compose/serve files from git: 3 failed on the old compose, 1 failed on
-  the old serve.py, all pass now.
+- **Container-suite findings:** the first in-image run reported 9 failures because the test
+  image was stale (built before the compose fix); a rebuild cleared 4 of them. The remaining 5
+  failed with `FileNotFoundError` because they read `Dockerfile`, `.dockerignore` and
+  `docker-compose.yml`, which `.dockerignore` deliberately excludes from the image.
+- **Skip policy (now):** the `test` stage sets `DELTA_CROPS_IN_TEST_IMAGE=1`; a single
+  `host_only` marker skips only the Docker-file tests, with the reason "reads repo files …
+  verified on the host". Skipping never happens because a file is missing: on the host the same
+  tests run and fail for real. `test_only_the_docker_file_tests_are_host_only` pins the exact
+  marked set (6 tests) and `test_dockerfile_sets_the_test_image_marker_only_in_the_test_stage`
+  pins that the variable exists in the `test` stage only.
+- **Tests:** host `150 passed, 1 deselected` (22.94 s); quick loop `139 passed, 12 deselected`
+  (5.63 s); simulated image env (`DELTA_CROPS_IN_TEST_IMAGE=1` on the module) `12 passed,
+  6 skipped`. Expected container result after a rebuild: `133 passed, 6 skipped, 12 deselected`
+  (two new Dockerfile tests since Ahmed's `132 passed, 5 skipped`).
+- **Rule for 6b runs:** rebuild `delta-crops:6b-test` after ANY `src/` change
+  (`HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`); a green container
+  suite proves the package/CLIs in the image, not the compose wiring.
 - **Half-done / NOT DONE:** 6b container verification (build/up/ps/logs/stats/in-container tests)
   is unverified until Ahmed re-runs. Phase 7+ not started.
 - **Next:** Ahmed rebuilds with `HOST_UID=1000 HOST_GID=1000 docker compose build`,

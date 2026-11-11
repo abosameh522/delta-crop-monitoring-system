@@ -57,6 +57,11 @@ CMD ["python", "-m", "delta_crops.orchestration.serve"]
 # Dev dependencies live only in this stage: the shipped image cannot import pytest.
 FROM runtime AS test
 
+# Tells the suite it is inside the image: the tests that parse Dockerfile,
+# .dockerignore and docker-compose.yml skip here (those files are not copied on
+# purpose) and still run on the host. It is NOT set in the runtime stage.
+ENV DELTA_CROPS_IN_TEST_IMAGE=1
+
 USER root
 RUN uv sync --frozen --extra dev \
  && chown -R app:app /app

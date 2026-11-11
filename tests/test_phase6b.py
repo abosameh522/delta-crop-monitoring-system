@@ -8,6 +8,8 @@ service that cannot start fails here instead of at `docker compose up`.
 from __future__ import annotations
 
 import json
+import os
+import sys
 import urllib.error
 from datetime import timedelta
 from pathlib import Path
@@ -20,6 +22,28 @@ from delta_crops.orchestration import serve as serve_module
 from delta_crops.orchestration.flow import scheduled_flow
 
 ROOT = Path(__file__).resolve().parents[1]
+
+#: Set by the Dockerfile `test` stage only. The image deliberately has no
+#: Dockerfile, .dockerignore or docker-compose.yml, so the tests that read those
+#: files are host-only. Skipping on a missing file is never acceptable: that
+#: would hide a real regression on the host.
+IN_TEST_IMAGE = os.environ.get("DELTA_CROPS_IN_TEST_IMAGE") == "1"
+
+host_only = pytest.mark.skipif(
+    IN_TEST_IMAGE,
+    reason="reads repo files (Dockerfile/.dockerignore/docker-compose.yml) that are "
+           "deliberately not in the image; verified on the host",
+)
+
+#: The exact tests allowed to carry ``host_only``. Anything else is a mistake.
+HOST_ONLY_TESTS = frozenset({
+    "test_dockerfile_has_a_nonroot_runtime_and_a_dev_test_stage",
+    "test_dockerfile_sets_the_test_image_marker_only_in_the_test_stage",
+    "test_dockerignore_excludes_data_venv_git_and_prefect",
+    "test_compose_runs_a_real_prefect_server_for_the_scheduler",
+    "test_compose_healthcheck_probes_the_api_each_service_uses",
+    "test_compose_runner_does_not_use_a_loopback_api_url",
+})
 
 
 def _compose() -> dict:
@@ -179,6 +203,7 @@ def test_healthcheck_accepts_an_active_deployment(monkeypatch, tmp_path) -> None
 
 # ------------------------------------------------------------ packaging ----
 
+@host_only
 def test_dockerfile_has_a_nonroot_runtime_and_a_dev_test_stage() -> None:
     text = _dockerfile()
     assert "FROM python:3.12-slim" in text
@@ -191,12 +216,14 @@ def test_dockerfile_has_a_nonroot_runtime_and_a_dev_test_stage() -> None:
     assert stages[-1].endswith("AS test")
 
 
+@host_only
 def test_dockerignore_excludes_data_venv_git_and_prefect() -> None:
     patterns = _dockerignore()
     for required in ("data/", ".venv/", ".git/", ".prefect/", ".env"):
         assert required in patterns, required
 
 
+@host_only
 def test_compose_runs_a_real_prefect_server_for_the_scheduler() -> None:
     """An ephemeral API skips the scheduler, so served schedules never fire."""
     services = _compose()["services"]
@@ -207,6 +234,7 @@ def test_compose_runs_a_real_prefect_server_for_the_scheduler() -> None:
     assert services["orchestrator"]["depends_on"]["server"]["condition"] == "service_healthy"
 
 
+@host_only
 def test_compose_healthcheck_probes_the_api_each_service_uses() -> None:
     services = _compose()["services"]
     for name, service in services.items():
@@ -219,8 +247,37 @@ def test_compose_healthcheck_probes_the_api_each_service_uses() -> None:
         )
 
 
+@host_only
 def test_compose_runner_does_not_use_a_loopback_api_url() -> None:
     """127.0.0.1 inside the runner container is not the server container."""
     env = _compose()["services"]["orchestrator"]["environment"]
     assert not env["PREFECT_API_URL"].startswith("http://127.0.0.1")
     assert _compose()["services"]["orchestrator"]["healthcheck"]["test"].count("--deployment") == 1
+
+
+def _stage(text: str, name: str) -> str:
+    """Return the Dockerfile lines of one stage (from its FROM to the next)."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip().endswith(f"AS {name}"))
+    end = next((i for i, line in enumerate(lines[start + 1:], start + 1)
+                if line.startswith("FROM ")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+@host_only
+def test_dockerfile_sets_the_test_image_marker_only_in_the_test_stage() -> None:
+    text = _dockerfile()
+    assert "DELTA_CROPS_IN_TEST_IMAGE=1" in _stage(text, "test")
+    assert "DELTA_CROPS_IN_TEST_IMAGE" not in _stage(text, "runtime")
+    assert "DELTA_CROPS_IN_TEST_IMAGE" not in _stage(text, "base")
+
+
+def test_only_the_docker_file_tests_are_host_only() -> None:
+    """The skip marker must never be applied to a test that runs in the image."""
+    module = sys.modules[__name__]
+    marked = {
+        name for name, obj in vars(module).items()
+        if name.startswith("test_") and getattr(obj, "pytestmark", None)
+        and any(mark.name == "skipif" for mark in obj.pytestmark)
+    }
+    assert marked == set(HOST_ONLY_TESTS), marked ^ set(HOST_ONLY_TESTS)

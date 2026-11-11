@@ -75,6 +75,15 @@ are published, so use `docker compose exec orchestrator prefect ...`. Why a real
 server is required (an ephemeral API has no scheduler), what each healthcheck
 proves, and the schedule anchor behaviour: `docs/phase6b-docker.md`.
 
+Notes on the container suite:
+
+- Rebuild the test image after any `src/` change
+  (`HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`),
+  otherwise you are testing old code.
+- Tests that read `Dockerfile`/`.dockerignore`/`docker-compose.yml` are host-only
+  and report as skipped inside the image, with a reason. A green container suite
+  proves the package and CLIs work in the image, not that the compose wiring does.
+
 ## Layout
 
 `config/` AOI and season · `src/delta_crops/` pipeline code · `tests/` pytest suite · `dags/` orchestration ·

@@ -164,3 +164,27 @@ previous `serve.py`. Verified by restoring both files from git and re-running.
 4. `prefect flow-run ls` timestamps can show the two queued runs did not
    overlap.
 5. Container memory is whatever `docker stats --no-stream` says; no claim.
+
+## Container-side tests: what they can and cannot cover
+
+- **Host-only tests skip inside the image.** Five (now six) tests parse
+  `Dockerfile`, `.dockerignore` and `docker-compose.yml`, and those files are
+  deliberately not in the image (`.dockerignore` drops them). The `test` stage
+  sets `DELTA_CROPS_IN_TEST_IMAGE=1` and those tests carry one `host_only`
+  marker with the reason "reads repo files … verified on the host". The marker
+  is never applied because a file is missing: on the host the same tests run and
+  fail for real. `test_only_the_docker_file_tests_are_host_only` pins the exact
+  set of marked tests, and
+  `test_dockerfile_sets_the_test_image_marker_only_in_the_test_stage` pins that
+  the variable exists only in the `test` stage.
+- **Rebuild the test image after any `src/` change.**
+  `HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`
+  before `docker compose --profile test run --rm tests`. The image copies the
+  source at build time; running a stale `delta-crops:6b-test` executes old code.
+  This happened once: a test image built before the compose fix reported 9
+  failures that the current tree did not have.
+- **A green container suite is not proof of the compose wiring.** It proves the
+  Python package, the CLIs and the Prefect client work inside the image. It does
+  not prove that `server` and `orchestrator` start, reach each other, register
+  the deployment or stay healthy — that is what `docker compose ps`, the
+  healthchecks, `prefect deployment inspect` and `flow-run ls` are for.
