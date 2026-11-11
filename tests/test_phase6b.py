@@ -121,3 +121,16 @@ def test_dockerignore_excludes_data_venv_git_and_prefect() -> None:
     patterns = _dockerignore()
     for required in ("data/", ".venv/", ".git/", ".prefect/", ".env"):
         assert required in patterns, required
+
+
+def test_compose_mounts_data_and_keeps_prefect_home_outside_it() -> None:
+    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "./data:/app/data" in text
+    assert "./config:/app/config:ro" in text
+    assert "./.prefect:/var/lib/prefect" in text
+    assert "PREFECT_HOME: /var/lib/prefect" in text
+    assert "DELTA_CROPS_DATA_DIR: /app/data" in text
+    assert "DELTA_CROPS_CONFIG: /app/config/aoi.yaml" in text
+    assert "restart: unless-stopped" in text
+    # The read-only data mount is what keeps tests away from the real lake.
+    assert "./data:/app/data:ro" in text

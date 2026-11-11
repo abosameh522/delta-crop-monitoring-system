@@ -4,6 +4,10 @@
 # Virtual environment
 .venv/
 
+# Prefect local state (images only; never committed)
+.prefect/
+.prefect-test/
+
 # Data lake (raw + derived data live only on the machine)
 data/
 
