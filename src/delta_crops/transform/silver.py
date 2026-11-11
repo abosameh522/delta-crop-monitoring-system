@@ -419,40 +419,28 @@ def build(
         fp_path = fingerprint_path(data_root, day)
 
         if not force and is_valid_output(target, expected_rows):
-            # File exists and has correct row count — check fingerprint
+            stored_fp = read_fingerprint(fp_path)
+            if stored_fp is None and not adopt:
+                summary["unfingerprinted"] += 1
+                print(f"[{index}/{len(dates)}] {day} skip (unfingerprinted)", flush=True)
+                continue
+            # Adoption always verifies checksums, even with --no-verify-checksum.
             tiles, problems = bronze_reader.assets_for_date(
-                ledger, data_root, day, verify_checksum=verify_checksum
+                ledger, data_root, day, verify_checksum=verify_checksum or adopt
             )
+            if adopt and stored_fp is None:
+                if any(not asset.sha256 for bands in tiles.values() for asset in bands.values()):
+                    problems.append("adoption requires a ledger SHA-256 for every asset")
             if problems or not tiles:
                 summary["failed"] += 1
                 summary["errors"].append(f"{day}: invalid Bronze inputs: {problems}")
                 continue
             current_fp = compute_fingerprint(tiles, grid, keep_cells, total_px, config)
-            stored_fp = read_fingerprint(fp_path)
             if stored_fp is None:
-                # Legacy file without fingerprint
-                if adopt:
-                    # Need to read assets to compute real fingerprint
-                    tiles, problems = bronze_reader.assets_for_date(
-                        ledger, data_root, day, verify_checksum=verify_checksum
-                    )
-                    if problems:
-                        raise bronze_reader.LedgerError("; ".join(problems))
-                    if not tiles:
-                        raise bronze_reader.LedgerError("no assets in ledger")
-                    current_fp = compute_fingerprint(
-                        tiles, grid, keep_cells, total_px, config
-                    )
-                    write_fingerprint(fp_path, current_fp)
-                    summary["adopted"] += 1
-                    if index % 25 == 0:
-                        print(f"[{index}/{len(dates)}] {day} adopt (wrote fingerprint)", flush=True)
-                    continue
-                else:
-                    summary["unfingerprinted"] += 1
-                    if index % 25 == 0:
-                        print(f"[{index}/{len(dates)}] {day} skip (unfingerprinted)", flush=True)
-                    continue
+                write_fingerprint(fp_path, current_fp)
+                summary["adopted"] += 1
+                print(f"[{index}/{len(dates)}] {day} adopt (verified inputs; wrote fingerprint)", flush=True)
+                continue
             elif not fingerprints_match(stored_fp, current_fp):
                 # Inputs changed — will rebuild below
                 rebuild_reason = "input changed"

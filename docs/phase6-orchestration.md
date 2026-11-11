@@ -57,3 +57,20 @@ B END 2026-11-11T02:15:17.854678+00:00
 
 This proves local deployment serialization only, not a working product pipeline.
 Server and runner are stopped after verification; Docker remains Phase 6b.
+
+
+## Step 4 acceptance evidence
+
+Normal builds with a valid existing output and missing fingerprint report
+`unfingerprinted=1, built=0, skipped=0, rebuilt_due_to_input_change=0` and return
+before reading Bronze assets. `skipped` counts matching-fingerprint skips;
+`unfingerprinted` is a separate skip reason. `--force` explicitly rebuilds.
+
+`--adopt` verifies selected asset presence, size and SHA-256; it requires every
+asset to have a ledger SHA-256 and enforces verification even if the checksum
+bypass flag was supplied. Only the sidecar fingerprint is written. Temporary
+fixture SHA-256 before/after:
+`c2e2f78eb869ae87008c8ea0a76ae653017d048a0cb501d4de12e0fa4841309e`.
+A same-size corrupt input is rejected without a sidecar or Parquet modification.
+This verifies current inputs, not proof that legacy output was built from them.
+No adoption or verification ran on real Bronze/Silver in this step.

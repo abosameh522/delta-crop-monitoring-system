@@ -1,6 +1,7 @@
 """Phase 6a orchestration contract tests (real CLI main() calls, tmp fixtures)."""
 
 import json
+from hashlib import sha256
 import time
 from copy import deepcopy
 from dataclasses import replace
@@ -453,6 +454,7 @@ def _setup_test_silver_build(tmp_path, monkeypatch):
                         band=band,
                         path=str(asset_path.relative_to(root)),
                         bytes=asset_path.stat().st_size,
+                        sha256=sha256(asset_path.read_bytes()).hexdigest(),
                         item_id=f"S2A_{tile}_{day.isoformat()}",
                         processing_baseline="5.0",
                     )
@@ -576,7 +578,10 @@ def test_silver_fingerprint_missing_reports_unfingerprinted(tmp_path, monkeypatc
         [{"cell_id": 1, "date": date(2023, 5, 1), "ndvi": 0.5, "valid_pixels": 50, "total_pixels": 100, "masked_pct": 50.0}]
     )
     pq.write_table(table, target)
-    # NO fingerprint file
+    # NO fingerprint file. Normal builds must not need Bronze input validation.
+    before = sha256(target.read_bytes()).hexdigest()
+    monkeypatch.setattr(silver.bronze_reader, "assets_for_date",
+                        lambda *a, **k: pytest.fail("unfingerprinted skip read Bronze inputs"))
 
     summary = silver.build(
         dates=[date(2023, 5, 1)],
@@ -593,6 +598,11 @@ def test_silver_fingerprint_missing_reports_unfingerprinted(tmp_path, monkeypatc
     assert summary["unfingerprinted"] == 1
     assert summary["built"] == 0
     assert summary["skipped"] == 0
+
+    assert summary["rebuilt_due_to_input_change"] == 0
+    assert sha256(target.read_bytes()).hexdigest() == before
+    print("NORMAL", {k: summary[k] for k in
+          ("built", "skipped", "rebuilt_due_to_input_change", "unfingerprinted")})
 
 
 def test_silver_fingerprint_adopt_writes_fingerprint(tmp_path, monkeypatch):
@@ -611,6 +621,7 @@ def test_silver_fingerprint_adopt_writes_fingerprint(tmp_path, monkeypatch):
     )
     pq.write_table(table, target)
     # NO fingerprint file
+    before = sha256(target.read_bytes()).hexdigest()
 
     summary = silver.build(
         dates=[date(2023, 5, 1)],
@@ -630,6 +641,27 @@ def test_silver_fingerprint_adopt_writes_fingerprint(tmp_path, monkeypatch):
     # Fingerprint file should now exist
     fp = fingerprint_path(root, date(2023, 5, 1))
     assert fp.exists()
+
+    after = sha256(target.read_bytes()).hexdigest()
+    assert before == after
+    assert summary["skipped"] == summary["rebuilt_due_to_input_change"] == 0
+    print("ADOPT", {k: summary[k] for k in
+          ("built", "skipped", "rebuilt_due_to_input_change", "unfingerprinted", "adopted", "failed")})
+    print("PARQUET_SHA256_BEFORE", before)
+    print("PARQUET_SHA256_AFTER ", after)
+    # Corrupt one input without changing size: adoption must reject its SHA-256.
+    fp.unlink()
+    asset = next((root / "bronze/assets/36RTV").glob("2023-05-01_B04.tif"))
+    asset.write_bytes(b"wrong")
+    rejected = silver.build(
+        dates=[date(2023, 5, 1)], config=config, data_root=root,
+        keep_cells=keep_cells, pixel_mask=pixel_mask, total_px=total_px,
+        grid=grid, verify_checksum=False, adopt=True,
+    )
+    assert rejected["failed"] == 1 and rejected["adopted"] == 0
+    assert not fp.exists()
+    assert sha256(target.read_bytes()).hexdigest() == before
+    print("CORRUPT_INPUT_ADOPTION", rejected["errors"])
 
 
 def test_silver_fingerprint_input_change_rebuilds(tmp_path, monkeypatch):

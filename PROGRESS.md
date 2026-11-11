@@ -3,13 +3,13 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Resumed Silver fingerprint repair and evidence audit complete; Phase 6a remains IN PROGRESS, not accepted DONE.
+- **Current step:** Step 4 missing-fingerprint/adoption evidence verified on tmp fixtures; awaiting acceptance. Step 5 NOT started.
 - **Done this session:** Fixed comparison against empty assets; 6 Silver fingerprint tests pass on temporary fixtures, including unchanged skip and one-date-only rebuild. Corrected regression script so anomaly reads temporary rebuilt weekly data. No real ingestion, backfill or Silver rebuild.
 - **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, Gold per-output fingerprints, per-year partial-season as_of wired into Gold, partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
 - **Tests:** default 93 passed, 1 slow deselected, 3 strict xfailed (Gold fingerprint and two task-retry tests), 4.87s; slow 1 passed, 96 deselected, 49.41s. 97 total, not the earlier promised 84. No unexpected failing tests. A prior default run emitted a Prefect shutdown logging error; helper test now uses task.fn to avoid starting an ephemeral server.
 - **Regression:** rebuild 41.67s / total comparison 48.91s; all 15 table/year comparisons have identical rows and zero EXCEPT differences both ways. Snapshot unchanged; outputs only in TemporaryDirectory.
 - **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs. A 02:14:44.456091–02:14:47.456425 UTC; B 02:15:14.854044–02:15:17.854678 UTC on 2026-11-11. No overlap. PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
-- **Next:** Phase 6a status report recorded. Remaining implementation is NOT DONE; Phase 6b unstarted.
+- **Next:** Step 4 acceptance pending. Normal unfingerprinted skip bypasses Bronze checks; adoption requires verified SHA-256 and leaves Parquet hash unchanged, including after a rejected corrupt-input attempt. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
