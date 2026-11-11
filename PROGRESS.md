@@ -78,8 +78,10 @@
 - **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
   adopted (2026-11-11), but the scheduled flow has never run end-to-end on real data. Phase 7+
   not started. Legacy Silver outputs were adopted on 2026-11-11.
-- **Next:** Phase 6 is closed and the real lake is adopted; Phase 7 starts only on
-  approval for Phase 7. No unverified claim is recorded as fact.
+- **Next:** Season-2024 plan is accepted with changes and its pre-flight is done
+  (`docs/adding-season-2024.md`); the config edit, the ingest (Ahmed, tmux) and everything after it
+  next is `go 2024 config`. Phase 7 starts only on approval for Phase 7. No unverified claim
+  is recorded as fact.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
