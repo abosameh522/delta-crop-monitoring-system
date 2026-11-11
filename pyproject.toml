@@ -30,4 +30,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -m \"not slow\""
-markers = ["slow: long-running regression checks"]
+markers = [
+    "slow: long-running regression checks",
+    "flow: Prefect flow/harness tests (slower; exclude with -m 'not flow')",
+]
