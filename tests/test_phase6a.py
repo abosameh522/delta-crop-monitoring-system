@@ -359,18 +359,16 @@ def test_gold_fingerprint_contains_as_of(tmp_path):
     assert fingerprint["silver_files"][0]["path"].endswith("date=2023-05-08.parquet")
 
 
-@pytest.mark.xfail(reason="step 8: retry mapping not implemented", strict=True)
 def test_task_retry_mapping_retries_only_code_3():
     from delta_crops.orchestration.flow import retry_codes
 
-    assert 3 in retry_codes()
+    assert retry_codes() == {3}
 
 
-@pytest.mark.xfail(reason="step 8: retry mapping not implemented", strict=True)
 def test_task_retry_mapping_does_not_retry_code_10_or_other_codes():
     from delta_crops.orchestration.flow import retry_codes
 
-    assert 10 not in retry_codes()
+    assert retry_codes().isdisjoint({0, 1, 2, 4, 10, 11})
 
 
 # ─── Helper-level only: these test to_exit_code(), not a CLI main() ───

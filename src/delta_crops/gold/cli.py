@@ -198,8 +198,9 @@ def main(argv: list[str] | None = None) -> int:
     except WeeklyGateFailure as error:
         print(str(error))
         return 11
-    except TransientFailure:
-        raise
+    except TransientFailure as error:
+        print(f"Transient failure: {error}")
+        return 3
     except SilverDateFailure:
         return 4
     except Exception as exc:  # noqa: BLE001
