@@ -45,6 +45,32 @@ Operational notes:
   machine changes mtimes and makes Gold rebuild unless fingerprints are copied
   or adopted (`--adopt`); preserving mtimes avoids the rebuild.
 
+## Run with Docker
+
+One container serves a five-day Prefect deployment (`flow.serve`, in-process
+API, at most one concurrent run):
+
+```bash
+mkdir -p .prefect .prefect-test
+HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose build
+docker compose up -d
+docker compose ps          # wait for "healthy"
+docker compose logs -f orchestrator
+```
+
+Manual run of a complete year, and container-side tests:
+
+```bash
+docker compose run --rm orchestrator python -m delta_crops.orchestration --reprocess-year 2021
+docker compose --profile test run --rm tests pytest -q -m "not slow and not flow"
+```
+
+`data/` and `config/` are mounted (data read-write, config read-only) and
+`PREFECT_HOME` lives in `./.prefect`, never inside `data/`. No ports are
+published, so use `docker compose exec orchestrator prefect ...` for Prefect
+CLI work. Details, trade-offs and the schedule anchor behaviour:
+`docs/phase6b-docker.md`.
+
 
 ## Layout
 
