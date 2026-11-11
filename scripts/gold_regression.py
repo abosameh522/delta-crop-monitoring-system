@@ -53,27 +53,11 @@ def _compare_table(con: duckdb.DuckDBPyConnection, snapshot_root: Path, test_roo
 
 def rebuild_gold(temp_root: Path, data_root: Path, years: list[int], config) -> dict:
     """Rebuild Gold tables into temp_root/gold using the real Silver from data_root."""
-    # Monkey-patch gold paths to write under temp_root instead of data_root
-    import delta_crops.gold.weekly as weekly_mod
-    import delta_crops.gold.anomaly as anomaly_mod
-    import delta_crops.gold.weather as weather_mod
-
-    original_weekly_path = weekly_mod.weekly_path
-    original_anomaly_path = anomaly_mod.anomaly_path
-    original_weather_path = weather_mod.weather_path
-
-    weekly_mod.weekly_path = lambda root, year: temp_root / "gold" / "weekly_ndvi" / f"year={year}" / "weekly_ndvi.parquet"
-    anomaly_mod.anomaly_path = lambda root, year: temp_root / "gold" / "ndvi_anomaly" / f"year={year}" / "ndvi_anomaly.parquet"
-    weather_mod.weather_path = lambda root, year: temp_root / "gold" / "weekly_weather" / f"year={year}" / "weekly_weather.parquet"
-
-    try:
-        weekly.build_weekly_ndvi(data_root, config, years, force=True)
-        anomaly.build_anomaly(data_root, config, years, force=True)
-        weather.build_weekly_weather(data_root, config, force=True)
-    finally:
-        weekly_mod.weekly_path = original_weekly_path
-        anomaly_mod.anomaly_path = original_anomaly_path
-        weather_mod.weather_path = original_weather_path
+    # Inputs remain read-only; every Gold output is rooted in TemporaryDirectory.
+    (temp_root / "silver").symlink_to((data_root / "silver").resolve(), target_is_directory=True)
+    weekly.build_weekly_ndvi(temp_root, config, years, force=True)
+    anomaly.build_anomaly(temp_root, config, years, force=True)
+    weather.build_weekly_weather(temp_root, config, force=True)
 
 
 def run_regression(snapshot_root: Path, data_root: Path, years: list[int] | None = None) -> bool:
