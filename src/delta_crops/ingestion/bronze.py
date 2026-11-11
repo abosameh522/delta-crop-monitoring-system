@@ -174,9 +174,11 @@ def ingest_scenes(
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    from delta_crops.errors import AssetFailure, TransientFailure
+
     path = log_path(data_root)
     index = latest_records(read_records(path))
-    stats = {"downloaded": 0, "skipped": 0, "failed": 0}
+    stats = {"downloaded": 0, "skipped": 0, "failed": 0, "failed_assets": []}
     lock = threading.Lock()
 
     pending: list[tuple[Scene, str]] = []
@@ -194,8 +196,14 @@ def ingest_scenes(
         asset_key = f"{scene.item_id}:{band}"
         target = _bronze_raster_path(data_root, scene, band)
         started = time.monotonic()
-        array, transform, crs, nodata = read_window(scene.hrefs[band], bbox)
-        write_cog(target, array, transform, crs, nodata)
+        try:
+            array, transform, crs, nodata = read_window(scene.hrefs[band], bbox)
+        except Exception as exc:  # noqa: BLE001 - network/STAC read errors are transient
+            raise TransientFailure(f"read_window failed for {asset_key}") from exc
+        try:
+            write_cog(target, array, transform, crs, nodata)
+        except Exception as exc:  # noqa: BLE001 - write errors are transient
+            raise TransientFailure(f"write_cog failed for {asset_key}") from exc
         record = _record_for_asset(
             scene=scene,
             band=band,
@@ -220,10 +228,19 @@ def ingest_scenes(
             scene, band = futures[future]
             try:
                 future.result()
-            except Exception as exc:  # noqa: BLE001 - one bad asset must not kill the run
+            except TransientFailure:
                 with lock:
                     stats["failed"] += 1
-                    print(f"  FAILED {scene.item_id}:{band}: {type(exc).__name__}: {exc}")
+                    stats["failed_assets"].append(f"{scene.item_id}:{band}")
+                raise
+            except Exception as exc:  # noqa: BLE001 - unexpected
+                with lock:
+                    stats["failed"] += 1
+                    stats["failed_assets"].append(f"{scene.item_id}:{band}")
+                raise TransientFailure(f"Unexpected error for {scene.item_id}:{band}") from exc
+
+    if stats["failed"] > 0:
+        raise AssetFailure(f"{stats['failed']} asset(s) failed: {', '.join(stats['failed_assets'])}")
     return stats
 
 

@@ -30,8 +30,12 @@ def build_params(lat: float, lon: float, start: date, end: date) -> dict[str, An
 
 
 def fetch_daily(lat: float, lon: float, start: date, end: date, timeout: int = 60, allow_partial: bool = False) -> dict[str, Any]:
-    response = requests.get(ARCHIVE_URL, params=build_params(lat, lon, start, end), timeout=timeout)
-    response.raise_for_status()
+    from delta_crops.errors import TransientFailure
+    try:
+        response = requests.get(ARCHIVE_URL, params=build_params(lat, lon, start, end), timeout=timeout)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise TransientFailure("Open-Meteo request failed") from exc
     payload = response.json()
     validate_payload(payload, start, end, allow_partial=allow_partial)
     return payload

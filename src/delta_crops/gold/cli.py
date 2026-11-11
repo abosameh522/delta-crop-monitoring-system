@@ -21,6 +21,7 @@ import duckdb
 from delta_crops.config import Config, data_dir, load_config, require_gold
 from delta_crops.gold import anomaly, gate, orbits, weather, weekly
 from delta_crops.gold.queries import sample_query
+from delta_crops.errors import to_exit_code, TransientFailure, SilverDateFailure
 
 
 def _years(args: argparse.Namespace, config: Config) -> list[int]:
@@ -50,34 +51,68 @@ def cmd_orbits(args: argparse.Namespace, config: Config, root: Path) -> int:
     return 0
 
 
-def cmd_weather(args: argparse.Namespace, config: Config, root: Path) -> int:
-    summary = weather.build_weekly_weather(root, config, force=args.force)
-    print(json.dumps(summary, indent=2))
-    return 0
-
-
 def cmd_weekly(args: argparse.Namespace, config: Config, root: Path) -> int:
-    summary = weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force)
+    try:
+        summary = weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force)
+    except TransientFailure:
+        raise
+    except SilverDateFailure:
+        return 4
+    except Exception as exc:  # noqa: BLE001
+        return to_exit_code(exc)
     print(json.dumps(summary, indent=2))
     return 0
 
 
 def cmd_anomaly(args: argparse.Namespace, config: Config, root: Path) -> int:
-    summary = anomaly.build_anomaly(root, config, _years(args, config), force=args.force)
+    try:
+        summary = anomaly.build_anomaly(root, config, _years(args, config), force=args.force)
+    except TransientFailure:
+        raise
+    except SilverDateFailure:
+        return 4
+    except Exception as exc:  # noqa: BLE001
+        return to_exit_code(exc)
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def cmd_weather(args: argparse.Namespace, config: Config, root: Path) -> int:
+    try:
+        summary = weather.build_weekly_weather(root, config, force=args.force)
+    except TransientFailure:
+        raise
+    except SilverDateFailure:
+        return 4
+    except Exception as exc:  # noqa: BLE001
+        return to_exit_code(exc)
     print(json.dumps(summary, indent=2))
     return 0
 
 
 def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
     gold = require_gold(config)
-    report = gate.weekly_gate(root, config)
+    try:
+        report = gate.weekly_gate(root, config)
+    except TransientFailure:
+        raise
+    except gate.WeeklyGateFailure as error:
+        print(str(error))
+        return 11
     print(gate.format_gate_table(report))
     cache = root / gold.orbit_cache
     if not cache.is_file():
         print(f"orbit cache missing, building: {orbits.build_orbit_cache(root, config)}")
-    print(json.dumps(weather.build_weekly_weather(root, config, force=args.force), indent=2))
-    print(json.dumps(weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force), indent=2))
-    print(json.dumps(anomaly.build_anomaly(root, config, _years(args, config), force=args.force), indent=2))
+    try:
+        print(json.dumps(weather.build_weekly_weather(root, config, force=args.force), indent=2))
+        print(json.dumps(weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force), indent=2))
+        print(json.dumps(anomaly.build_anomaly(root, config, _years(args, config), force=args.force), indent=2))
+    except TransientFailure:
+        raise
+    except SilverDateFailure:
+        return 4
+    except Exception as exc:  # noqa: BLE001
+        return to_exit_code(exc)
     return 0
 
 
@@ -137,6 +172,7 @@ def cmd_verify(args: argparse.Namespace, config: Config, root: Path) -> int:
 
 
 def main() -> int:
+    from delta_crops.errors import WeeklyGateFailure
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--config", type=Path, default=None)
@@ -158,9 +194,15 @@ def main() -> int:
     }[args.command]
     try:
         return handler(args, config, root)
-    except gate.WeeklyGateFailure as error:
+    except WeeklyGateFailure as error:
         print(str(error))
         return 11
+    except TransientFailure:
+        raise
+    except SilverDateFailure:
+        return 4
+    except Exception as exc:  # noqa: BLE001
+        return to_exit_code(exc)
 
 
 if __name__ == "__main__":

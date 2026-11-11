@@ -292,6 +292,8 @@ def build(
     force: bool = False,
 ) -> dict[str, Any]:
     """Process dates, skipping valid existing outputs. Returns a run summary."""
+    from delta_crops.errors import SilverDateFailure, TransientFailure
+
     ledger = bronze_reader.load_ledger(data_root)
     expected_rows = int(keep_cells.sum())
     scl_by_year: dict[int, np.ndarray] = {}
@@ -317,10 +319,21 @@ def build(
             if not tiles:
                 raise bronze_reader.LedgerError("no assets in ledger")
             outcome = process_date(day, tiles, grid, keep_cells, pixel_mask, total_px, config)
-        except Exception as exc:  # noqa: BLE001 - one bad date must not kill the build
+        except bronze_reader.LedgerError as exc:
             summary["failed"] += 1
-            summary["errors"].append(f"{day}: {type(exc).__name__}: {exc}")
-            print(f"[{index}/{len(dates)}] {day} FAILED {type(exc).__name__}: {exc}", flush=True)
+            summary["errors"].append(f"{day}: LedgerError: {exc}")
+            print(f"[{index}/{len(dates)}] {day} FAILED LedgerError: {exc}", flush=True)
+            continue
+        except Exception as exc:  # noqa: BLE001 - check for transient errors
+            if isinstance(exc, (TransientFailure,)):
+                raise
+            # Check for DuckDB lock or other transient errors
+            exc_name = type(exc).__name__
+            if "lock" in str(exc).lower() or "database is locked" in str(exc).lower():
+                raise TransientFailure(f"DuckDB lock on {day}") from exc
+            summary["failed"] += 1
+            summary["errors"].append(f"{day}: {exc_name}: {exc}")
+            print(f"[{index}/{len(dates)}] {day} FAILED {exc_name}: {exc}", flush=True)
             continue
 
         write_parquet_atomic(outcome.table, target)

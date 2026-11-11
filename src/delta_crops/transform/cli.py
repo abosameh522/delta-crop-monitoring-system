@@ -14,6 +14,7 @@ import pyarrow.parquet as pq
 from delta_crops.config import Config, data_dir, load_config
 from delta_crops.transform import bronze_reader, cells, silver, weather
 from delta_crops.transform.grid import PIXELS_PER_CELL, load_or_build
+from delta_crops.errors import SilverDateFailure, to_exit_code, TransientFailure
 
 
 def _select_dates(command: str, args: argparse.Namespace, ledger: dict) -> list[date]:
@@ -76,17 +77,27 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 2
     total = _total_pixels(pixels, grid)
     print(f"Processing {len(dates)} dates over {int(keep.sum())} kept cells")
-    summary = silver.build(
-        dates=dates,
-        config=config,
-        data_root=root,
-        keep_cells=keep,
-        pixel_mask=pixels,
-        total_px=total,
-        grid=grid,
-        verify_checksum=not args.no_verify_checksum,
-        force=args.force,
-    )
+    try:
+        summary = silver.build(
+            dates=dates,
+            config=config,
+            data_root=root,
+            keep_cells=keep,
+            pixel_mask=pixels,
+            total_px=total,
+            grid=grid,
+            verify_checksum=not args.no_verify_checksum,
+            force=args.force,
+        )
+    except SilverDateFailure as exc:
+        print(f"Silver date failure: {exc}")
+        return 4
+    except TransientFailure:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"Unexpected Silver error: {type(exc).__name__}: {exc}")
+        return 1
+
     print(
         f"Done: {summary['processed']} processed, {summary['skipped']} skipped, "
         f"{summary['failed']} failed in {summary['wall_seconds']:.1f}s "
@@ -94,7 +105,9 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
     )
     for error in summary["errors"]:
         print(f"  {error}")
-    return 0 if summary["failed"] == 0 else 1
+    if summary["failed"] > 0:
+        raise SilverDateFailure(f"{summary['failed']} date(s) failed")
+    return 0
 
 
 def cmd_status(args: argparse.Namespace, config: Config, root: Path) -> int:
@@ -194,10 +207,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from delta_crops.errors import SilverDateFailure
+    try:
+        args = build_parser().parse_args(argv)
+    except SystemExit as exc:
+        return exc.code
     config = load_config(args.config)
     root = Path(args.data_dir) if args.data_dir else data_dir()
-    return args.func(args, config, root)
+    try:
+        return args.func(args, config, root)
+    except SilverDateFailure as exc:
+        print(f"Silver date failure: {exc}")
+        return 4
 
 
 if __name__ == "__main__":

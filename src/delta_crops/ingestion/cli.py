@@ -11,6 +11,7 @@ from pathlib import Path
 from delta_crops.config import Config, data_dir, load_config
 from delta_crops.ingestion import bronze
 from delta_crops.ingestion.earth_search import expected_assets, search_scenes
+from delta_crops.errors import AssetFailure, to_exit_code, TransientFailure
 
 
 def _parse_date(value: str) -> date:
@@ -34,49 +35,72 @@ def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
     root = Path(args.data_dir) if args.data_dir else data_dir()
     print(f"Searching Earth Search {start} .. {end} (cloud < {config.quality.max_scene_cloud_pct}%)")
     started = time.monotonic()
-    scenes = search_scenes(
-        bbox=config.bbox.as_list,
-        start=start,
-        end=end,
-        max_cloud_pct=config.quality.max_scene_cloud_pct,
-    )
+    try:
+        scenes = search_scenes(
+            bbox=config.bbox.as_list,
+            start=start,
+            end=end,
+            max_cloud_pct=config.quality.max_scene_cloud_pct,
+        )
+    except Exception as exc:  # noqa: BLE001 - STAC search failures are transient
+        print(f"STAC search failed: {type(exc).__name__}: {exc}")
+        raise TransientFailure("STAC search failed") from exc
+
     tiles = sorted({scene.tile for scene in scenes})
     print(f"Selected {len(scenes)} scenes over tiles {tiles}")
 
-    stats = bronze.ingest_scenes(
-        scenes=scenes,
-        bbox=config.bbox,
-        config=config,
-        data_root=root,
-        verify_checksum=not args.no_checksum,
-        workers=args.workers,
-    )
+    try:
+        stats = bronze.ingest_scenes(
+            scenes=scenes,
+            bbox=config.bbox,
+            config=config,
+            data_root=root,
+            verify_checksum=not args.no_checksum,
+            workers=args.workers,
+        )
+    except AssetFailure as exc:
+        print(f"Ingestion asset failure: {exc}")
+        return 4
+    except TransientFailure:
+        raise
+    except Exception as exc:  # noqa: BLE001 - unexpected
+        print(f"Unexpected ingestion error: {type(exc).__name__}: {exc}")
+        return 1
 
     for year in _years_between(start, end):
-        print(f"Weather {year}: {bronze.ingest_weather(config, year, root)}")
+        try:
+            result = bronze.ingest_weather(config, year, root)
+        except TransientFailure:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            print(f"Weather {year}: FAILED {type(exc).__name__}: {exc}")
+            return 1
+        print(f"Weather {year}: {result}")
 
     print(
         f"Done in {time.monotonic() - started:.1f}s: "
         f"{stats['downloaded']} downloaded, {stats['skipped']} skipped, {stats['failed']} failed"
     )
     print(f"Log: {bronze.log_path(root)}")
-    return 0 if stats["failed"] == 0 else 1
+    if stats["failed"] > 0:
+        raise AssetFailure(f"{stats['failed']} asset(s) failed")
+    return 0
 
 
 def cmd_weather(args: argparse.Namespace, config: Config) -> int:
     """Fetch Open-Meteo daily data for one year or for every configured season year."""
     root = Path(args.data_dir) if args.data_dir else data_dir()
     years = [args.year] if args.year else list(config.seasons.years)
-    failed = 0
     for year in years:
         try:
             result = bronze.ingest_weather(config, year, root)
-        except Exception as exc:  # noqa: BLE001 - report every year, then fail
-            failed += 1
+        except TransientFailure:
+            raise
+        except Exception as exc:  # noqa: BLE001
             print(f"Weather {year}: FAILED {type(exc).__name__}: {exc}")
-            continue
+            return 1
         print(f"Weather {year}: {result}")
-    return 0 if failed == 0 else 1
+    return 0
 
 
 def cmd_compact(args: argparse.Namespace, _: Config) -> int:
@@ -168,9 +192,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from delta_crops.errors import AssetFailure, TransientFailure
+    try:
+        args = build_parser().parse_args(argv)
+    except SystemExit as exc:
+        return exc.code
     config = load_config(args.config)
-    return args.func(args, config)
+    try:
+        return args.func(args, config)
+    except AssetFailure as exc:
+        print(f"Asset failure: {exc}")
+        return 4
+    except TransientFailure as exc:
+        print(f"Transient failure: {exc}")
+        return 3
 
 
 if __name__ == "__main__":
