@@ -1,9 +1,10 @@
 """Leave-one-year-out NDVI anomaly: descriptive Gold, never a model feature.
 
 The baseline for a cell and ISO week is the mean of the same ISO week in the
-other four seasons, using only years whose weekly status is `ok`; no smoothing
-across weeks. Phase 7 must recompute any baseline feature from training years
-only (D-015, D-044).
+other seasons, using only complete seasons (all weather days present) whose
+weekly status is `ok`; no smoothing across weeks. An incomplete season never
+enters another year's baseline. Phase 7 must recompute any baseline feature from
+training years only (D-015, D-044).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from delta_crops.config import Config, require_gold
+from delta_crops.gold.as_of import complete_years
 from delta_crops.gold.weekly import anomaly_path, weekly_path
 
 ANOMALY_SCHEMA = pa.schema(
@@ -43,6 +45,11 @@ def build_anomaly(
     """Write `gold/ndvi_anomaly/year=Y/` for each year from all weekly years."""
     gold = require_gold(config)
     years = list(years or config.seasons.years)
+    complete = set(complete_years(root, config, config.seasons.years))
+    if complete:
+        baseline_filter = "AND yr IN (" + ", ".join(str(y) for y in sorted(complete)) + ")"
+    else:
+        baseline_filter = "AND FALSE"
     glob = str(root / "gold" / "weekly_ndvi" / "year=*" / "*.parquet")
     summary: dict = {"years": [], "seconds": 0.0}
     started = time.perf_counter()
@@ -59,8 +66,10 @@ def build_anomaly(
             cur_rows = con.execute("SELECT count(*) FROM all_weeks WHERE yr = ?", [year]).fetchall()[0][0]
             if not cur_rows:
                 raise ValueError(f"no weekly_ndvi rows for {year}; build weekly_ndvi first")
-            if not force and target.is_file() and pq.ParquetFile(target).metadata.num_rows == cur_rows:
-                summary["years"].append(dict(year=year, rows=cur_rows, skipped=True))
+            if (not force and year in complete and target.is_file()
+                    and pq.ParquetFile(target).metadata.num_rows == cur_rows):
+                summary["years"].append(dict(year=year, rows=cur_rows, skipped=True,
+                                             complete=year in complete))
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             tmp = target.with_suffix(".parquet.tmp")
@@ -72,7 +81,7 @@ def build_anomaly(
                     "    count(DISTINCT yr) FILTER (WHERE status = 'ok') AS n_years,"
                     "    avg(ndvi_mean) FILTER (WHERE status = 'ok') AS bmean,"
                     "    stddev_samp(ndvi_mean) FILTER (WHERE status = 'ok') AS bstd"
-                    "  FROM all_weeks WHERE yr <> ? GROUP BY 1, 2"
+                    "  FROM all_weeks WHERE yr <> ? " + baseline_filter + " GROUP BY 1, 2"
                     "), cur AS (SELECT * FROM all_weeks WHERE yr = ?) "
                     "SELECT c.cell_id, c.week_start,"
                     " CAST(c.ndvi_mean AS REAL) AS ndvi_mean,"
@@ -98,7 +107,8 @@ def build_anomaly(
                 os.replace(tmp, target)
             finally:
                 tmp.unlink(missing_ok=True)
-            summary["years"].append(dict(year=year, rows=cur_rows, skipped=False))
+            summary["years"].append(dict(year=year, rows=cur_rows, skipped=False,
+                                         complete=year in complete))
     finally:
         con.close()
     summary["seconds"] = round(time.perf_counter() - started, 2)

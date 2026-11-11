@@ -32,7 +32,7 @@ from delta_crops.gold.weekly import (
 from delta_crops.gold.weather import build_weekly_weather, heatwave_day_flags
 
 YEARS = (2021, 2022, 2023, 2024)
-CROPLAND_VALUES = {2021: 0.20, 2022: 0.30, 2023: 0.40, 2024: 0.50}
+CROPLAND_VALUES = {2020: 0.10, 2021: 0.20, 2022: 0.30, 2023: 0.40, 2024: 0.50}
 NDVI_SCHEMA = pa.schema([
     ("cell_id", pa.int32()), ("date", pa.date32()), ("ndvi", pa.float32()),
     ("valid_pixels", pa.uint8()), ("total_pixels", pa.uint8()), ("masked_pct", pa.float32()),
@@ -77,13 +77,17 @@ def test_weekly_status_rule() -> None:
 @pytest.fixture()
 def gold_env(tmp_path: Path) -> tuple[Path, Config]:
     """Four cells, four years, and one crafted week per year."""
+    return _make_gold_env(tmp_path, YEARS)
+
+
+def _make_gold_env(root: Path, years: tuple[int, ...]) -> tuple[Path, Config]:
+    """Build a self-contained Silver fixture with a crafted week per year."""
     base = load_config()
     config = replace(
         base,
-        seasons=replace(base.seasons, focus=2024, years=YEARS),
+        seasons=replace(base.seasons, focus=max(years), years=years),
         gold=replace(base.gold, orbit_cache="silver/_cache/orbits.parquet"),
     )
-    root = tmp_path
     cells = pa.table({
         "cell_id": pa.array([0, 1, 2, 3], pa.int32()),
         "is_cropland": pa.array([True, True, False, False], pa.bool_()),
@@ -92,7 +96,7 @@ def gold_env(tmp_path: Path) -> tuple[Path, Config]:
     pq.write_table(cells, root / "silver" / "cells.parquet")
 
     weather_rows = []
-    for year in YEARS:
+    for year in years:
         start, end = config.seasons.bounds(year)
         for offset in range((end - start).days + 1):
             day = start + timedelta(days=offset)
@@ -110,7 +114,7 @@ def gold_env(tmp_path: Path) -> tuple[Path, Config]:
     pq.write_table(pa.Table.from_pylist(weather_rows), root / "silver" / "weather.parquet")
 
     orbit_rows = []
-    for year in YEARS:
+    for year in years:
         monday = _week19_monday(year)
         for offset in (0, 1, 2, 3, 4, 7, 9):
             day = monday + timedelta(days=offset)
@@ -119,7 +123,7 @@ def gold_env(tmp_path: Path) -> tuple[Path, Config]:
     cache.parent.mkdir(parents=True)
     pq.write_table(pa.Table.from_pylist(orbit_rows), cache)
 
-    for year in YEARS:
+    for year in years:
         monday = _week19_monday(year)
         days = [monday + timedelta(days=offset) for offset in (0, 1, 2, 3, 4, 7, 9)]
         for day in days:
@@ -361,3 +365,72 @@ def test_late_last_acquisition_in_complete_season_keeps_week_38_evaluated(
         for row in pq.read_table(weekly_path(root, 2023)).to_pylist()
     }
     assert rows[(0, week38)]["status"] != "not_yet_observed"
+
+
+# ─── anomaly: not_yet_observed propagation and complete-season baseline pool ───
+
+
+def test_anomaly_propagates_not_yet_observed(gold_env: tuple[Path, Config]) -> None:
+    root, config = gold_env
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of)
+    build_weekly_ndvi(root, config, years=[2024], force=True)
+    build_anomaly(root, config, years=[2024], force=True)
+    week = iso_week_start(as_of)
+    weekly = {
+        (row["cell_id"], row["week_start"]): row
+        for row in pq.read_table(weekly_path(root, 2024)).to_pylist()
+    }
+    anomaly = {
+        (row["cell_id"], row["week_start"]): row
+        for row in pq.read_table(
+            root / "gold" / "ndvi_anomaly" / "year=2024" / "ndvi_anomaly.parquet"
+        ).to_pylist()
+    }
+    assert weekly[(0, week)]["status"] == "not_yet_observed"
+    assert anomaly[(0, week)]["status"] == "not_yet_observed"
+    assert anomaly[(0, week)]["anomaly"] is None
+    assert anomaly[(0, week)]["ndvi_mean"] is None
+
+
+def test_partial_season_is_excluded_from_another_years_baseline(tmp_path: Path) -> None:
+    years = (2020, 2021, 2022, 2023, 2024)
+    root, config = _make_gold_env(tmp_path / "five", years)
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of)
+    build_weekly_ndvi(root, config, force=True)
+    build_anomaly(root, config, force=True)
+    week19 = _week19_monday(2023)
+    row = next(
+        row for row in pq.read_table(
+            root / "gold" / "ndvi_anomaly" / "year=2023" / "ndvi_anomaly.parquet"
+        ).to_pylist()
+        if row["cell_id"] == 0 and row["week_start"] == week19
+    )
+    # 2024 is partial and must not enter 2023's baseline, even though its week 19 is ok.
+    assert row["status"] == "ok"
+    assert row["n_baseline_years"] == 3
+    assert row["baseline_mean"] == pytest.approx(0.20, abs=1e-6)
+
+
+def test_baseline_with_fewer_than_three_complete_years_gives_no_baseline(
+    tmp_path: Path,
+) -> None:
+    root, config = _make_gold_env(tmp_path / "four", YEARS)
+    as_of = date(2024, 7, 3)
+    _trim_weather_after(root, 2024, as_of)
+    _add_ndvi_date(root, 2024, as_of)
+    build_weekly_ndvi(root, config, force=True)
+    build_anomaly(root, config, force=True)
+    week19 = _week19_monday(2023)
+    row = next(
+        row for row in pq.read_table(
+            root / "gold" / "ndvi_anomaly" / "year=2023" / "ndvi_anomaly.parquet"
+        ).to_pylist()
+        if row["cell_id"] == 0 and row["week_start"] == week19
+    )
+    assert row["status"] == "no_baseline"
+    assert row["n_baseline_years"] == 2
+    assert row["anomaly"] is None
