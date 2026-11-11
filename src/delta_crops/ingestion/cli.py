@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from datetime import date
@@ -20,6 +21,16 @@ def _parse_date(value: str) -> date:
     return date.fromisoformat(value)
 
 
+def _write_summary(path: Path | None, payload: dict) -> None:
+    """Write a machine-readable CLI summary atomically; the flow reads it."""
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
 def _years_between(start: date, end: date) -> list[int]:
     return list(range(start.year, end.year + 1))
 
@@ -35,61 +46,89 @@ def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
         return 2
 
     root = Path(args.data_dir) if args.data_dir else data_dir()
-    print(f"Searching Earth Search {start} .. {end} (cloud < {config.quality.max_scene_cloud_pct}%)")
+    summary: dict = {
+        "status": "running",
+        "new": 0,
+        "skipped": 0,
+        "bytes": 0,
+        "failed": 0,
+        "weather": {},
+    }
     started = time.monotonic()
     try:
-        scenes = search_scenes(
-            bbox=config.bbox.as_list,
-            start=start,
-            end=end,
-            max_cloud_pct=config.quality.max_scene_cloud_pct,
-        )
-    except requests.RequestException as exc:
-        # Only transport/HTTP failures are retryable; anything else is a bug.
-        print(f"STAC search failed: {type(exc).__name__}: {exc}")
-        raise TransientFailure("STAC search failed") from exc
-
-    tiles = sorted({scene.tile for scene in scenes})
-    print(f"Selected {len(scenes)} scenes over tiles {tiles}")
-
-    try:
-        stats = bronze.ingest_scenes(
-            scenes=scenes,
-            bbox=config.bbox,
-            config=config,
-            data_root=root,
-            verify_checksum=not args.no_checksum,
-            workers=args.workers,
-            attempts=args.asset_retries,
-            retry_base_delay_s=args.retry_delay,
-        )
-    except AssetFailure as exc:
-        print(f"Ingestion asset failure: {exc}")
-        return 4
-    except TransientFailure:
-        raise
-    except Exception as exc:  # noqa: BLE001 - unexpected
-        print(f"Unexpected ingestion error: {type(exc).__name__}: {exc}")
-        return 1
-
-    for year in _years_between(start, end):
+        print(f"Searching Earth Search {start} .. {end} (cloud < {config.quality.max_scene_cloud_pct}%)")
         try:
-            result = bronze.ingest_weather(config, year, root)
-        except TransientFailure:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            print(f"Weather {year}: FAILED {type(exc).__name__}: {exc}")
-            return 1
-        print(f"Weather {year}: {result}")
+            scenes = search_scenes(
+                bbox=config.bbox.as_list,
+                start=start,
+                end=end,
+                max_cloud_pct=config.quality.max_scene_cloud_pct,
+            )
+        except requests.RequestException as exc:
+            # Only transport/HTTP failures are retryable; anything else is a bug.
+            print(f"STAC search failed: {type(exc).__name__}: {exc}")
+            raise TransientFailure("STAC search failed") from exc
 
-    print(
-        f"Done in {time.monotonic() - started:.1f}s: "
-        f"{stats['downloaded']} downloaded, {stats['skipped']} skipped, {stats['failed']} failed"
-    )
-    print(f"Log: {bronze.log_path(root)}")
-    if stats["failed"] > 0:
-        raise AssetFailure(f"{stats['failed']} asset(s) failed")
-    return 0
+        tiles = sorted({scene.tile for scene in scenes})
+        print(f"Selected {len(scenes)} scenes over tiles {tiles}")
+
+        try:
+            stats = bronze.ingest_scenes(
+                scenes=scenes,
+                bbox=config.bbox,
+                config=config,
+                data_root=root,
+                verify_checksum=not args.no_checksum,
+                workers=args.workers,
+                attempts=args.asset_retries,
+                retry_base_delay_s=args.retry_delay,
+            )
+        except AssetFailure as exc:
+            print(f"Ingestion asset failure: {exc}")
+            summary["status"] = "failed"
+            return 4
+        except TransientFailure:
+            summary["status"] = "failed"
+            raise
+        except Exception as exc:  # noqa: BLE001 - unexpected
+            print(f"Unexpected ingestion error: {type(exc).__name__}: {exc}")
+            summary["status"] = "failed"
+            return 1
+        summary.update(
+            new=stats["downloaded"],
+            skipped=stats["skipped"],
+            bytes=stats["bytes"],
+            failed=stats["failed"],
+        )
+
+        partial_years = set(getattr(args, "allow_partial_weather_year", None) or [])
+        for year in _years_between(start, end):
+            try:
+                result = bronze.ingest_weather(
+                    config, year, root, allow_partial=year in partial_years
+                )
+            except TransientFailure:
+                summary["status"] = "failed"
+                raise
+            except Exception as exc:  # noqa: BLE001
+                print(f"Weather {year}: FAILED {type(exc).__name__}: {exc}")
+                summary["status"] = "failed"
+                return 1
+            summary["weather"][str(year)] = result
+            print(f"Weather {year}: {result}")
+
+        print(
+            f"Done in {time.monotonic() - started:.1f}s: "
+            f"{stats['downloaded']} downloaded, {stats['skipped']} skipped, {stats['failed']} failed"
+        )
+        print(f"Log: {bronze.log_path(root)}")
+        if stats["failed"] > 0:
+            summary["status"] = "failed"
+            raise AssetFailure(f"{stats['failed']} asset(s) failed")
+        summary["status"] = "ok"
+        return 0
+    finally:
+        _write_summary(getattr(args, "summary_json", None), summary)
 
 
 def cmd_weather(args: argparse.Namespace, config: Config) -> int:
@@ -180,6 +219,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="attempts per asset (default: config ingestion.asset_attempts)")
     ingest.add_argument("--retry-delay", type=float, default=None,
                         help="retry backoff base in seconds (default: config value)")
+    ingest.add_argument("--summary-json", type=Path, default=None,
+                        help="write a machine-readable ingestion summary here")
+    ingest.add_argument("--allow-partial-weather-year", type=int, action="append", default=None,
+                        help="year whose Open-Meteo response may be short (in-progress season)")
     ingest.set_defaults(func=cmd_ingest)
 
     weather_cmd = sub.add_parser("weather", help="fetch Open-Meteo daily data (no imagery)")

@@ -198,7 +198,7 @@ def ingest_scenes(
 
     path = log_path(data_root)
     index = latest_records(read_records(path))
-    stats: dict[str, Any] = {"downloaded": 0, "skipped": 0, "failed": 0, "failed_assets": []}
+    stats: dict[str, Any] = {"downloaded": 0, "skipped": 0, "failed": 0, "bytes": 0, "failed_assets": []}
     lock = threading.Lock()
 
     pending: list[tuple[Scene, str]] = []
@@ -258,6 +258,7 @@ def ingest_scenes(
             append_record(path, record)
             index[asset_key] = record
             stats["downloaded"] += 1
+            stats["bytes"] += int(record["bytes"])
             print(
                 f"  {asset_key}  {record['bytes'] / 1e6:.1f} MB  "
                 f"{record['duration_s']:.1f}s  nodata {record['nodata_pct']:.2f}%"
@@ -290,19 +291,28 @@ def ingest_scenes(
     return stats
 
 
-def ingest_weather(config: Config, year: int, data_root: Path) -> str:
-    """Fetch and store one year of daily weather. Returns 'downloaded' or 'skipped'."""
+def ingest_weather(config: Config, year: int, data_root: Path, allow_partial: bool = False) -> str:
+    """Fetch and store one year of daily weather.
+
+    Returns ``"downloaded"``, ``"skipped"`` or ``"partial"``. ``allow_partial``
+    is only for a season still in progress: a short Open-Meteo response is then
+    stored with ``weather_status=partial`` and is non-blocking. A complete year
+    must return every configured day.
+    """
     path = log_path(data_root)
     index = latest_records(read_records(path))
     asset_key = f"weather:{year}"
     target = data_root / "bronze" / "weather" / f"year={year}" / "open_meteo_daily.json"
-    if is_complete(index.get(asset_key), target):
+    existing = index.get(asset_key)
+    # A partial file must be refreshed on the next run so later days arrive.
+    if existing and existing.get("weather_status", "complete") != "partial" and is_complete(existing, target):
         return "skipped"
 
     start, end = config.seasons.bounds(year)
     lat, lon = config.bbox.center
     started = time.monotonic()
-    payload = weather.fetch_daily(lat, lon, start, end)
+    payload = weather.fetch_daily(lat, lon, start, end, allow_partial=allow_partial)
+    status = weather.validate_payload(payload, start, end, allow_partial=allow_partial)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -327,11 +337,12 @@ def ingest_weather(config: Config, year: int, data_root: Path) -> str:
             "stac_href": weather.ARCHIVE_URL,
             "nodata_pct": None,
             "resolution_m": None,
+            "weather_status": status,
             "duration_s": round(time.monotonic() - started, 3),
             "http_requests": 1,
         },
     )
-    return "downloaded"
+    return "partial" if status == "partial" else "downloaded"
 
 
 def _parquet_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:

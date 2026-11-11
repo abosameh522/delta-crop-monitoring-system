@@ -28,6 +28,24 @@ def _years(args: argparse.Namespace, config: Config) -> list[int]:
     return [args.year] if getattr(args, "year", None) else list(config.seasons.years)
 
 
+def _write_summary(path: Path | None, payload: dict) -> None:
+    """Write a machine-readable Gold summary atomically; the flow reads it."""
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _table_counts(summary: dict) -> dict:
+    """Keep only the fields the run log needs from one Gold table summary."""
+    return {
+        key: summary.get(key, 0)
+        for key in ("built", "skipped", "rebuilt_due_to_input_change", "unfingerprinted", "adopted", "failed")
+    }
+
+
 def cmd_gate(args: argparse.Namespace, config: Config, root: Path) -> int:
     report = gate.weekly_gate(root, config)
     print(gate.format_gate_table(report))
@@ -92,28 +110,51 @@ def cmd_weather(args: argparse.Namespace, config: Config, root: Path) -> int:
 
 def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
     gold = require_gold(config)
+    summary: dict = {"status": "running", "tables": {}, "years": _years(args, config)}
     try:
-        report = gate.weekly_gate(root, config)
-    except TransientFailure:
-        raise
-    except gate.WeeklyGateFailure as error:
-        print(str(error))
-        return 11
-    print(gate.format_gate_table(report))
-    cache = root / gold.orbit_cache
-    if not cache.is_file():
-        print(f"orbit cache missing, building: {orbits.build_orbit_cache(root, config)}")
-    try:
-        print(json.dumps(weather.build_weekly_weather(root, config, force=args.force, adopt=args.adopt), indent=2))
-        print(json.dumps(weekly.build_weekly_ndvi(root, config, _years(args, config), force=args.force, adopt=args.adopt), indent=2))
-        print(json.dumps(anomaly.build_anomaly(root, config, _years(args, config), force=args.force, adopt=args.adopt), indent=2))
-    except TransientFailure:
-        raise
-    except SilverDateFailure:
-        return 4
-    except Exception as exc:  # noqa: BLE001
-        return to_exit_code(exc)
-    return 0
+        try:
+            report = gate.weekly_gate(root, config)
+        except TransientFailure:
+            summary["status"] = "failed"
+            raise
+        except gate.WeeklyGateFailure as error:
+            print(str(error))
+            summary["status"] = "failed"
+            summary["error"] = str(error)
+            return 11
+        print(gate.format_gate_table(report))
+        cache = root / gold.orbit_cache
+        if not cache.is_file():
+            print(f"orbit cache missing, building: {orbits.build_orbit_cache(root, config)}")
+        try:
+            weather_summary = weather.build_weekly_weather(root, config, force=args.force, adopt=args.adopt)
+            print(json.dumps(weather_summary, indent=2))
+            weekly_summary = weekly.build_weekly_ndvi(
+                root, config, _years(args, config), force=args.force, adopt=args.adopt
+            )
+            print(json.dumps(weekly_summary, indent=2))
+            anomaly_summary = anomaly.build_anomaly(
+                root, config, _years(args, config), force=args.force, adopt=args.adopt
+            )
+            print(json.dumps(anomaly_summary, indent=2))
+        except TransientFailure:
+            summary["status"] = "failed"
+            raise
+        except SilverDateFailure:
+            summary["status"] = "failed"
+            return 4
+        except Exception as exc:  # noqa: BLE001
+            summary["status"] = "failed"
+            return to_exit_code(exc)
+        summary["tables"] = {
+            "weekly_weather": _table_counts(weather_summary),
+            "weekly_ndvi": _table_counts(weekly_summary),
+            "ndvi_anomaly": _table_counts(anomaly_summary),
+        }
+        summary["status"] = "ok"
+        return 0
+    finally:
+        _write_summary(getattr(args, "summary_json", None), summary)
 
 
 def cmd_verify(args: argparse.Namespace, config: Config, root: Path) -> int:
@@ -121,6 +162,7 @@ def cmd_verify(args: argparse.Namespace, config: Config, root: Path) -> int:
     con = duckdb.connect()
     con.execute("SET threads = ?", [gold.duckdb_threads]).fetchall()
     con.execute("SET memory_limit = ?", [gold.duckdb_memory_limit]).fetchall()
+    summary: dict = {"status": "running", "years": {}}
     try:
         for year in config.seasons.years:
             weekly_glob = str(root / "gold" / "weekly_ndvi" / f"year={year}" / "*.parquet")
@@ -161,13 +203,23 @@ def cmd_verify(args: argparse.Namespace, config: Config, root: Path) -> int:
                 f" ok_without_anomaly={anomaly_row[7]}"
             )
             print(f"{year} weather: rows={weather_rows[0]} heatwave_days={weather_rows[1]}")
+            summary["years"][str(year)] = {
+                "weekly_rows": int(row[0]),
+                "weekly_keys": int(row[1]),
+                "anomaly_rows": int(anomaly_row[0]),
+                "weather_rows": int(weather_rows[0]),
+            }
         started = time.perf_counter()
         frame = con.execute(sample_query(root, config.seasons.focus)).df()
         seconds = time.perf_counter() - started
         print(f"\nsample query: {len(frame)} rows in {seconds:.3f} s")
         print(frame.to_string(index=False))
+        summary["status"] = "ok"
+        summary["sample_query_rows"] = len(frame)
+        summary["sample_query_seconds"] = round(seconds, 3)
     finally:
         con.close()
+        _write_summary(getattr(args, "summary_json", None), summary)
     return 0
 
 
@@ -182,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--year", type=int, default=None)
         command.add_argument("--force", action="store_true")
         command.add_argument("--adopt", action="store_true")
+        command.add_argument("--summary-json", type=Path, default=None,
+                             help="write a machine-readable Gold summary here")
         if name == "orbits":
             command.add_argument("--refresh", action="store_true")
             command.add_argument("--diagnose", action="store_true")

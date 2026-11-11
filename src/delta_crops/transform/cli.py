@@ -77,40 +77,54 @@ def cmd_build(args: argparse.Namespace, config: Config, root: Path) -> int:
         return 2
     total = _total_pixels(pixels, grid)
     print(f"Processing {len(dates)} dates over {int(keep.sum())} kept cells")
+    summary: dict | None = None
     try:
-        summary = silver.build(
-            dates=dates,
-            config=config,
-            data_root=root,
-            keep_cells=keep,
-            pixel_mask=pixels,
-            total_px=total,
-            grid=grid,
-            verify_checksum=not args.no_verify_checksum,
-            force=args.force,
-            adopt=args.adopt,
-        )
-    except SilverDateFailure as exc:
-        print(f"Silver date failure: {exc}")
-        return 4
-    except TransientFailure:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        print(f"Unexpected Silver error: {type(exc).__name__}: {exc}")
-        return 1
+        try:
+            summary = silver.build(
+                dates=dates,
+                config=config,
+                data_root=root,
+                keep_cells=keep,
+                pixel_mask=pixels,
+                total_px=total,
+                grid=grid,
+                verify_checksum=not args.no_verify_checksum,
+                force=args.force,
+                adopt=args.adopt,
+            )
+        except SilverDateFailure as exc:
+            print(f"Silver date failure: {exc}")
+            return 4
+        except TransientFailure:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            print(f"Unexpected Silver error: {type(exc).__name__}: {exc}")
+            return 1
 
-    print(
-        f"Done: {summary['built']} built, {summary['skipped']} skipped, "
-        f"{summary['rebuilt_due_to_input_change']} rebuilt (input change), "
-        f"{summary['unfingerprinted']} unfingerprinted, {summary['adopted']} adopted, "
-        f"{summary['failed']} failed in {summary['wall_seconds']:.1f}s "
-        f"(peak RSS {summary['peak_rss_mb']:.0f} MB)"
-    )
-    for error in summary["errors"]:
-        print(f"  {error}")
-    if summary["failed"] > 0:
-        raise SilverDateFailure(f"{summary['failed']} date(s) failed")
-    return 0
+        print(
+            f"Done: {summary['built']} built, {summary['skipped']} skipped, "
+            f"{summary['rebuilt_due_to_input_change']} rebuilt (input change), "
+            f"{summary['unfingerprinted']} unfingerprinted, {summary['adopted']} adopted, "
+            f"{summary['failed']} failed in {summary['wall_seconds']:.1f}s "
+            f"(peak RSS {summary['peak_rss_mb']:.0f} MB)"
+        )
+        for error in summary["errors"]:
+            print(f"  {error}")
+        if summary["failed"] > 0:
+            raise SilverDateFailure(f"{summary['failed']} date(s) failed")
+        return 0
+    finally:
+        _write_summary(getattr(args, "summary_json", None), {"status": "ok" if summary and not summary["failed"] else "failed", **(summary or {})})
+
+
+def _write_summary(path: Path | None, payload: dict) -> None:
+    """Write a machine-readable Silver summary atomically; the flow reads it."""
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    tmp.replace(path)
 
 
 def cmd_status(args: argparse.Namespace, config: Config, root: Path) -> int:
@@ -202,6 +216,8 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--no-verify-checksum", action="store_true", help="skip SHA-256 on Bronze reads")
         cmd.add_argument("--force", action="store_true", help="rebuild dates even if output exists")
         cmd.add_argument("--adopt", action="store_true", help="write fingerprints for existing files without rebuilding")
+        cmd.add_argument("--summary-json", type=Path, default=None,
+                         help="write a machine-readable build summary here")
         cmd.set_defaults(func=cmd_build)
 
     status = sub.add_parser("status", help="count Silver files against ledger dates")

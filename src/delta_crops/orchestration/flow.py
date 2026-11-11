@@ -39,6 +39,8 @@ DEFAULT_RETRY_DELAYS = [1.0, 2.0, 4.0]
 class TransientError(RuntimeError):
     """Task-level transient failure: the only error Prefect retries."""
 
+    exit_code = 3
+
 
 class PipelineError(RuntimeError):
     """Non-retryable task failure, carrying the CLI exit code."""

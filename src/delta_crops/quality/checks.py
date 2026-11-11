@@ -217,5 +217,7 @@ def run_quality(root: Path, config: Config) -> Path:
     write_report(path, report)
     if report["status"] == "failed":
         failures = [c["check"] for c in report["checks"] if c["severity"] == "critical" and c["count"]]
-        raise QualityFailure(f"Critical quality failure: {', '.join(failures)}. Report: {path}")
+        failure = QualityFailure(f"Critical quality failure: {', '.join(failures)}. Report: {path}")
+        failure.report_path = path
+        raise failure
     return path
