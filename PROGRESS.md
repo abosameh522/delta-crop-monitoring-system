@@ -3,14 +3,14 @@
 ## Status
 
 - **Phase:** 6a — orchestration **IN PROGRESS**; Phase 5 accepted DONE.
-- **Current step:** Step 6 (Gold input fingerprints, verified skips, `--adopt`) implemented and verified; awaiting acceptance. Step 7 NOT started.
-- **Done this session:** Step 6 — `gold/fingerprint.py`; fingerprints next to every weekly/anomaly/weather partition; skip only on matching fingerprint + valid rows; `unfingerprinted` skips; `--adopt` without touching Parquet; per-table built/skipped/rebuilt_due_to_input_change/unfingerprinted counts. The `test_gold_fingerprint_contains_as_of` xfail is now real.
-- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, partial-weather ingestion wiring, RasterioIOError-only asset retry and atomic temp output. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
-- **Tests:** default 111 passed, 1 slow deselected, 2 strict xfailed, 4.43s; slow 1 passed, 113 deselected, 43.64s. 114 total. No unexpected failing tests.
-- **Regression:** final run 43.16s total (build 37.09s); all 15 table/year comparisons identical, zero EXCEPT differences both ways. First Step 6 run also 15/15 (64.48s under transient load). Snapshot unchanged; outputs and fingerprints only in TemporaryDirectory.
-- **Step 6 behaviour:** weekly fingerprint = Silver partition names/sizes/mtime_ns + weather SHA-256 + as_of + config hash + code version; weather = weather SHA-256 + as_of + config; anomaly = stored weekly fingerprints of its baseline pool **and its current year** (needed because anomaly rows carry the current weekly NDVI) + complete-year list + as_of + config. Silver identity uses metadata, not content hashes, because Silver writes atomically and hashing ~750 MB per build is unnecessary.
+- **Current step:** Step 7 (asset-level retry + atomic Bronze writes) implemented and verified; awaiting acceptance. Step 8 NOT started.
+- **Done this session:** Step 7 — only `rasterio.errors.RasterioIOError` retried, 3 attempts per asset with configurable exponential backoff; broad `Exception -> TransientFailure` wrapping removed; tmp raster deleted on any write failure; ledger appended only after `os.replace` and final-file size/SHA-256; remaining assets finish after a failure, failed-asset summary printed, `AssetFailure` exit 4; scheduled re-runs skip from ledger+size with zero reads/re-hashes.
+- **Half-done / NOT DONE:** real four-task flow, retry-condition mapping, try/finally failure run log, partial-weather ingestion wiring. Legacy Silver outputs still need explicit adoption; their provenance is not established by current inputs alone.
+- **Tests:** default 117 passed, 1 slow deselected, 2 strict xfailed, 6.27s; slow 1 passed, 119 deselected, 73.97s. 120 total. No unexpected failing tests.
+- **Regression:** Step 7 does not touch Gold; the slow regression test still passes (1 passed) against the frozen 15 table/year snapshot.
+- **Step 7 behaviour:** asset retries 3 x task retries 3 = 9 attempts max; `AssetFailure` (4) is not retried. CRSError/OSError and other asset-scoped exceptions are one failed asset (4), not transient; errors outside the asset boundary exit 1. Bronze driver remains explicit `COG` (GTiff container, Phase 2 decision), written as `<band>.tif.tmp` then `os.replace`.
 - **Concurrency:** local Prefect 3.9.2 flow.serve(global_limit=1, limit=2), two concurrently submitted runs, no overlap (02:14:44–02:14:47 and 02:15:14–02:15:17 UTC on 2026-11-11). PREFECT_HOME=/tmp/delta_phase6a_prefect; no Docker.
-- **Next:** Step 6 acceptance pending. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
+- **Next:** Step 7 acceptance pending. Step 9 spike accepted; Step 8 flow NOT DONE. Phase 6b unstarted.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 

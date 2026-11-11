@@ -339,3 +339,79 @@ def test_crse_error_is_not_retried(tmp_path, monkeypatch):
             [make_scene()], CONFIG.bbox, CONFIG, tmp_path, workers=1, retry_base_delay_s=0.0
         )
     assert len(calls) == 1
+
+
+def test_one_failed_asset_does_not_stop_others_and_cli_exits_4(tmp_path, monkeypatch):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red", "B08": "nir"})
+    scene = make_scene()
+
+    def read(href, bbox):
+        if href.endswith("B04.tif"):
+            raise RasterioIOError("permanent read failure")
+        return fake_window(href, bbox)
+
+    monkeypatch.setattr(bronze, "read_window", read)
+    monkeypatch.setattr(bronze, "write_cog", fake_write)
+    from delta_crops.ingestion import cli
+
+    monkeypatch.setattr(cli, "search_scenes", lambda **kwargs: [scene])
+    code = cli.main([
+        "--data-dir", str(tmp_path), "ingest", "--year", "2023",
+        "--workers", "1", "--retry-delay", "0",
+    ])
+
+    assert code == 4
+    assert bronze._bronze_raster_path(tmp_path, scene, "B08").is_file()
+    records = bronze.read_records(bronze.log_path(tmp_path))
+    assert len(records) == 1 and records[0]["band"] == "B08"
+
+
+def test_write_exception_leaves_no_tmp_final_file_or_ledger(tmp_path, monkeypatch):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red"})
+    scene = make_scene()
+    monkeypatch.setattr(bronze, "read_window", fake_window)
+
+    def broken_write(path, array, transform, crs, nodata):
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(bronze, "write_cog", broken_write)
+    with pytest.raises(AssetFailure):
+        bronze.ingest_scenes(
+            [scene], CONFIG.bbox, CONFIG, tmp_path, workers=1, retry_base_delay_s=0.0
+        )
+
+    assert not bronze._bronze_raster_path(tmp_path, scene, "B04").exists()
+    assert not list(tmp_path.rglob("*.tmp"))
+    assert bronze.read_records(bronze.log_path(tmp_path)) == []
+
+
+def test_scheduled_rerun_skips_from_ledger_and_size_without_downloading(tmp_path, monkeypatch):
+    monkeypatch.setattr(bronze, "BAND_ASSETS", {"B04": "red"})
+    scene = make_scene()
+    calls: list[str] = []
+
+    def read(href, bbox):
+        calls.append(href)
+        return fake_window(href, bbox)
+
+    monkeypatch.setattr(bronze, "read_window", read)
+    monkeypatch.setattr(bronze, "write_cog", fake_write)
+    first = bronze.ingest_scenes(
+        [scene], CONFIG.bbox, CONFIG, tmp_path, verify_checksum=False,
+        workers=1, retry_base_delay_s=0.0,
+    )
+    assert first["downloaded"] == 1
+
+    # Same size, different bytes: scheduled mode trusts the ledger + size only.
+    target = bronze._bronze_raster_path(tmp_path, scene, "B04")
+    target.write_bytes(b"y" * 32)
+    calls.clear()
+    second = bronze.ingest_scenes(
+        [scene], CONFIG.bbox, CONFIG, tmp_path, verify_checksum=False,
+        workers=1, retry_base_delay_s=0.0,
+    )
+    assert second["skipped"] == 1 and second["downloaded"] == 0
+    assert calls == []

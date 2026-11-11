@@ -74,3 +74,40 @@ fixture SHA-256 before/after:
 A same-size corrupt input is rejected without a sidecar or Parquet modification.
 This verifies current inputs, not proof that legacy output was built from them.
 No adoption or verification ran on real Bronze/Silver in this step.
+
+
+## Step 7 — asset retry and atomic Bronze writes
+
+Only `rasterio.errors.RasterioIOError` is retried. Each asset gets
+`ingestion.asset_attempts` attempts (default 3) with exponential backoff based
+on `ingestion.retry_base_delay_s` (default 1.0 s; tests pass 0). The CLI exposes
+`--asset-retries` and `--retry-delay`.
+
+`CRSError`, `OSError` from a write, and every other asset-scoped exception are
+NOT retried and are NOT `TransientFailure`. They are recorded as a failed asset
+and the run finishes the remaining assets, then raises `AssetFailure` (exit 4).
+Errors outside the asset boundary (for example a ledger write failure) propagate
+as unexpected (exit 1). STAC search failures remain `requests.RequestException`
+-> `TransientFailure` (exit 3).
+
+Nested retry budget: an asset can be attempted at most 3 (asset) x 3 (task) = 9
+times. `AssetFailure` (exit 4) is itself NEVER retried by the task.
+
+Bronze writes go to `<band>.tif.tmp` with an explicit GDAL driver (`COG`, a
+GTiff container, as decided in Phase 2), then `os.replace` to the final path.
+The tmp file is deleted on any exception. The ledger line is appended only
+after `os.replace` succeeds, and its byte size and SHA-256 are computed from the
+final file. A crash therefore cannot leave a visible partial raster or a ledger
+line without a file.
+
+Scheduled idempotency reads the JSONL ledger and checks the final file size
+(`verify_checksum=False`), so an already-logged asset causes zero downloads and
+zero re-hashing. `--no-checksum` selects this mode; the default still verifies
+SHA-256.
+
+Evidence tests (mock `read_window`/`write_cog`, tmp fixtures only):
+RasterioIOError twice then success -> 1 asset, 3 read calls, 1 ledger line;
+always RasterioIOError -> 3 calls, no final/tmp/ledger, failed summary printed;
+one failed asset does not stop others and CLI `main()` returns 4; write
+exception leaves no tmp/ledger; CRSError -> 1 call; scheduled re-run -> 0 reads
+and 0 downloads.
