@@ -8,6 +8,8 @@ import time
 from datetime import date
 from pathlib import Path
 
+import requests
+
 from delta_crops.config import Config, data_dir, load_config
 from delta_crops.ingestion import bronze
 from delta_crops.ingestion.earth_search import expected_assets, search_scenes
@@ -42,7 +44,8 @@ def cmd_ingest(args: argparse.Namespace, config: Config) -> int:
             end=end,
             max_cloud_pct=config.quality.max_scene_cloud_pct,
         )
-    except Exception as exc:  # noqa: BLE001 - STAC search failures are transient
+    except requests.RequestException as exc:
+        # Only transport/HTTP failures are retryable; anything else is a bug.
         print(f"STAC search failed: {type(exc).__name__}: {exc}")
         raise TransientFailure("STAC search failed") from exc
 
@@ -206,6 +209,9 @@ def main(argv: list[str] | None = None) -> int:
     except TransientFailure as exc:
         print(f"Transient failure: {exc}")
         return 3
+    except Exception as exc:  # noqa: BLE001 - contract: unexpected errors exit 1
+        print(f"Unexpected failure: {type(exc).__name__}: {exc}")
+        return 1
 
 
 if __name__ == "__main__":

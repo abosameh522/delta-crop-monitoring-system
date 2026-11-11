@@ -10,6 +10,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import requests
 
 from delta_crops.config import load_config
 from delta_crops.errors import (
@@ -56,12 +57,21 @@ def _patch_transform_prerequisites(monkeypatch):
 
 
 def test_ingestion_transient_exception_maps_to_3(monkeypatch, tmp_path):
-    """Ingestion CLI main() returns 3 when the STAC search fails transiently."""
+    """Ingestion CLI main() returns 3 when the STAC search fails on transport."""
     from delta_crops.ingestion import cli as ingest_cli
 
-    monkeypatch.setattr(ingest_cli, "search_scenes", _raise(TransientFailure("STAC timeout")))
+    monkeypatch.setattr(ingest_cli, "search_scenes", _raise(requests.ConnectionError("STAC unreachable")))
 
     assert ingest_cli.main(["--data-dir", str(tmp_path), "ingest", "--year", "2023"]) == 3
+
+
+def test_ingestion_unexpected_exception_maps_to_1(monkeypatch, tmp_path):
+    """A non-requests bug in the STAC step is unexpected, not retryable: exit 1."""
+    from delta_crops.ingestion import cli as ingest_cli
+
+    monkeypatch.setattr(ingest_cli, "search_scenes", _raise(KeyError("schema changed")))
+
+    assert ingest_cli.main(["--data-dir", str(tmp_path), "ingest", "--year", "2023"]) == 1
 
 
 def test_ingestion_asset_failure_maps_to_4(monkeypatch, tmp_path):
