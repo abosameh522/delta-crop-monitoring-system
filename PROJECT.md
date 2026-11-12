@@ -614,20 +614,24 @@ priority (no averaging) stands. The full-series numbers are in `data/silver/_rep
 ├── PROJECT.md           # question, scope, architecture, decisions log
 ├── PROGRESS.md          # phase checklist and notes
 ├── README.md            # short landing page until Phase 9
+├── artifacts/           # Phase 7 model artifacts: metrics JSON, dataset (gitignored)
 ├── config/aoi.yaml      # AOI, seasons, grid, quality thresholds
 ├── data/                # local lake: bronze | silver | gold (gitignored)
-├── dags/                # orchestration (Phase 6)
-├── docs/                # reports, model card, screenshots
+├── docs/                # phase reports, pre-registration, model card
 ├── scripts/backfill.sh  # sequential, logged, resumable Bronze backfill
 ├── src/delta_crops/
 │   ├── ingestion/       # Phase 2: Earth Search + Open-Meteo → Bronze
 │   ├── transform/       # Phase 3: Bronze → Silver, Phase 5: Gold
 │   ├── quality/         # Phase 4: data-quality checks
-│   ├── features/        # Phase 7: modelling features
-│   ├── models/          # Phase 7: baseline + XGBoost
-│   └── dashboard/       # Phase 8: Streamlit app
+│   ├── orchestration/   # Phase 6: Prefect flow, four tasks, run log
+│   ├── features/        # empty; Phase 7 features live in models/dataset.py
+│   ├── models/          # Phase 7: dataset, baselines, train (temporal/LOSO/spatial)
+│   └── dashboard/       # Phase 8: Streamlit app (empty until then)
 └── tests/               # pytest suite, one file per concern
 ```
+
+There is no `dags/` directory: orchestration is the Prefect flow in
+`src/delta_crops/orchestration/`, not Airflow DAG files.
 
 `src/delta_crops/` is a single installed package so imports are unambiguous and `pip install -e .`
 works from any working directory.
@@ -694,6 +698,11 @@ pytest -q
 | D-044 | 2026-11-11 | Leave-one-year-out anomaly: same ISO week, ok years only, no smoothing, current-week status wins | Baseline mean of up to 4 years; <3 → no_baseline. Current-week status (insufficient/too_cloudy) overrides no_baseline; only ok status exposes anomaly/zscore. Descriptive only; Phase 7 must recompute from training years. |
 | D-045 | 2026-11-11 | Heatwave: daily Tmax ≥ 40.0 °C inside a run of ≥ 3 consecutive days (window 1 May–30 Sep) | Chosen from real 765-day pool: 47 days (6.1 %) in 9 episodes; 35 °C runs cover 73 %, 38 °C runs 29 %. 2023: 18 heatwave days in 4 episodes (14–18 Jul, 22–28 Jul, 5–7 Aug, 6–8 Sep). Runs detected on full daily series; weekly `heatwave_days` splits runs at ISO week boundaries (e.g., 5–7 Aug puts 2 days in week 2023-07-31, 1 day in 2023-08-07). The 1-day week is **not** a separate episode. 40 °C is the pooled p90 (40.2) rounded. |
 | D-046 | 2026-11-11 | Orbit metadata cached under Silver; per-week orbit_mix and n_orbits; diagnostic is descriptive; zscore indicative only | STAC product_uri parsed, no date has >1 orbit. 5-day pairing is same orbit (not cross-orbit). Cross-orbit pairs (2–3 d) show R064 reads ~0.005–0.010 higher than R021 in all 5 years, but phenology confounds it; earlier claim that offset is small/absent on cropland is withdrawn. Labelled, not corrected. zscore has heavy tails (p1 = −8.2, p99 = +7.5) because baseline_std is from 3–4 years; anomaly (raw difference) is the primary signal; zscore must not be used as stress detection. |
+| D-047 | 2026-11-12 | Phase 7 target: per cell-week, mean **raw** NDVI anomaly over `t+1` and `t+2` ≤ **−0.08**, both weeks `status='ok'`, features stop at week `t`, baseline from training seasons only | Threshold is a physical NDVI amount fixed before training, roughly the 16th–21st percentile of the forward anomaly with a 15–22 % positive rate, so it is neither rare nor trivial. Both horizon weeks must be observed, so the label never means "next two available observations". The raw difference is used because D-044/D-046 established that `zscore` has unusable tails at 3–4 baseline years. Leave-one-training-year-out for train rows and all training seasons for test rows prevents a season entering its own baseline (D-015). Frozen in `docs/phase7-preregistration.md` §1–§3 before any fit. |
+| D-048 | 2026-11-12 | Baseline B3 is a logistic regression on `anomaly_t, anomaly_lag1, week_index` **with an intercept**; the intercept-free fit is a defect, fixed in `770d885` | B3 standardised its features but fitted no intercept, so `sigmoid(0)=0.5` at the feature mean instead of the training prevalence. Mean predicted probability on 2024 cropland/pooled was 0.519 against a 0.251 prevalence and every reliability bin over-predicted. Adding the intercept leaves ranking (ROC-AUC, PR-AUC) unchanged and cuts Brier from 0.1929 to 0.1050. Because B3 is the reference for every verdict, a mis-calibrated B3 would have made the Brier condition meaningless. Fixed before any verdict was computed; all reported B3 numbers are post-fix. |
+| D-049 | 2026-11-12 | Verdict bars are "B3 + 0.05 PR-AUC, P@R.5 strictly greater, Brier strictly lower", derived **per campaign** from that campaign's own B3, and never changed after seeing a result | S3's bar (0.8222002 / 0.8145373 / 0.1050482) applies to the single 2024 temporal test. S4 re-derives it on the **mean over six folds** (0.8205095 / 0.8187709 / 0.0947832) because an S3 bar is not an average-over-folds reference, while keeping the 0.05 margin since target, metric and population are unchanged. S5 re-fits B3 on **exactly its own training rows** and scores **exactly its own held-out blocks**, because neither the S3 all-block bar nor the S4 season bar is the right reference for a block-held-out population; the margin stays 0.05 because changing it after two failures would be post-hoc. Result: all three campaigns fail PR-AUC only (S3 by 0.0008298, S4 by 0.0013625, S5 by 0.0140022) and pass P@R.5 and Brier. Freezes in `fb54129`, `675eb4c`, `6fd4226`. |
+| D-050 | 2026-11-12 | S5 spatial holdout uses a **frozen** 5 km block partition: 110 block ids sorted, permuted with `default_rng(20260702)`, first 28 held out (25.45 %), rest train; never re-drawn | `block_5km = (cell_row // 50) * 10000 + (cell_col // 50)`, already materialised by the dataset builder, so the partition is a pure function of the block id list and one seed and is auditable in the artifact. It is not chosen from any result. Held-out blocks contribute no rows of any season to fitting, early stopping or refit, which is the spatial leakage S4 cannot remove. Realised caveats reported, not fixed: 28 declared but 27 blocks scorable (80009 has no cropland/pooled 2024 row) and 4 declared training blocks carry no rows. |
+| D-051 | 2026-11-12 | `num_boost_round ≤ 600` is frozen for S3, S4 **and** S5 and is not raised after seeing a cap hit; cap hits are reported as a property of the run | S4 folds `loso-2021`/`loso-2022` hit the cap (full 596/592, ndvi_only 600/595), so early stopping never fired there. S5 did **not** hit it (full best round 593, ndvi_only 599, `hit_cap: false` of 600 run), but sits within two rounds of it, so a larger cap could plausibly help. Raising the cap after seeing a near-hit would be post-hoc model selection, so it was left unchanged and recorded as a known limitation instead. Every variant uses identical hyperparameters: `hist`, `binary:logistic`, `max_depth=6`, `eta=0.05`, seed 20260701, patience 50 on `aucpr`. |
 
 ### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
 
@@ -776,9 +785,69 @@ See [the Phase 5 report](docs/phase5-gold.md) for the exact schemas, gate decomp
 orbit diagnostic, heatwave definition and evidence, anomaly construction, sample query
 output, and limitations. All 65 tests pass; full `build --force` completes in ~50 s.
 
+### Phase 7 models and measured results
+
+The target, features, splits, bars and decision rule were frozen in
+[`docs/phase7-preregistration.md`](docs/phase7-preregistration.md) **before any model was
+fitted**. The full record, including calibration, limitations and the interview explanation,
+is the [model card](docs/model-card.md). Every number below is from `artifacts/phase7/`.
+
+**Target (D-047).** Per cell-week, using only information up to the end of ISO week `t`: the
+mean **raw** NDVI anomaly over weeks `t+1` and `t+2` is **≤ −0.08** (both weeks must be
+`status = 'ok'`; never the z-score). Baseline from training seasons only.
+
+**Dataset (S1).** 14,977,696 usable rows, 2,933,974 positives (19.59 %): 2019 2,519,921;
+2020 2,728,392; 2021 2,681,558; 2022 2,589,333; 2023 1,431,931; 2024 3,026,561 (test).
+Built by `5651bfc`; measured summary in `artifacts/phase7/dataset_summary.json`.
+
+**Baselines (S2, `8b0164b`, `770d885`, `98938ce`).** B0 majority, B1 persistence (`−anomaly_t`,
+a ranking score with no Brier), B2 seasonal prior, B3 logistic regression on
+`anomaly_t, anomaly_lag1, week_index`. On S3
+`cropland/pooled`: B0 PR-AUC 0.2508243, B1 0.7589650, B2 0.2819829, **B3 0.7722002**
+(P@R.5 0.8145373, Brier 0.1050482). B3 had a missing intercept until `770d885`; fixing it left
+ranking unchanged and cut Brier from 0.1929 to 0.1050. B3 is the reference for every verdict.
+
+**Campaigns and verdicts — all three FAIL on the PR-AUC condition only.**
+
+| Campaign | Split | Bar (PR-AUC / P@R.5 / Brier) | `full` | `ndvi_only` | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| S3 `ace7352` | train 2019–2023, test 2024 | 0.8222002 / 0.8145373 / 0.1050482 | 0.8213705 / 0.8713148 / 0.0936884 | 0.8235561 / 0.8740270 / 0.0924261 | **FAIL** (misses by 0.0008298) |
+| S4 `68215bd` | leave-one-season-out, 6 folds, mean | 0.8205095 / 0.8187709 / 0.0947832 | 0.8191470 / 0.8754861 / 0.0835801 | 0.8235976 / 0.8812944 / 0.0824871 | **FAIL** (misses by 0.0013625) |
+| S5 `2a30b52` | 28 of 110 five-km blocks held out, 2024 only | 0.8147217 / 0.8070753 / 0.1036731 | 0.8007195 / 0.8436102 / 0.0960768 | 0.8042603 / 0.8470021 / 0.0942075 | **FAIL** (misses by 0.0140022) |
+
+Freezes: S3 `fb54129`, S4 `675eb4c`, S5 `6fd4226`. In every campaign `full` passes the
+operating-point and calibration conditions and fails only PR-AUC. S5's bar 0.8147217 lies
+inside both 95 % block-bootstrap intervals (full [0.7818991, 0.8211190], ndvi_only
+[0.7863661, 0.8239851]) and above both point estimates; the verdict stays on the point
+estimates. The paired `full − B3` PR-AUC difference on S5 is **+0.0360180** [+0.0276012,
++0.0438191] over 1000/1000 usable block draws — a real gain that is smaller than the 0.05
+margin the project required.
+
+**Onset headline (separate, not part of any verdict).** On S5 `cropland/onset` (442,124 rows,
+prevalence 0.0961) `full` reaches PR-AUC 0.3929923 vs B3 0.3203791; `all/onset` 0.3839020 vs
+0.2932640. S3 onset: `full` 0.4373937 vs B3 0.3205508. The onset population is where the model
+adds the most over B3 (+0.0726 on S5), and it is reported separately as pre-registered.
+
+**No weather effect is claimed.** `ndvi_only` beats `full` on all three campaigns (0.8235561
+vs 0.8213705; 0.8235976 vs 0.8191470; 0.8042603 vs 0.8007195) and has the lower Brier each
+time. Weather is a single grid point (~120 independent weeks), so this is unsurprising but it
+is stated, not hidden.
+
+**Sanity controls passed everywhere**: XGBoost on the three B3 features clears its frozen floor
+(B3 − 0.02) in every campaign and every fold (S3 0.7962004 vs B3 0.7722002; S5 0.7828792 vs B3
+0.7647217), and permuted labels score at prevalence (S3 gap 0.0003802; S5 gap 0.0008192).
+
+**Documented gaps.** S5 has no reliability table: predictions were not persisted
+(`prediction` and `reliab` occur 0 times in `xgb_spatial.json`) and no re-run was performed, so
+S5 calibration is unmeasured. S5 declared 28 held-out blocks but 27 produced scorable rows
+(block 80009 has none) and 78 of the declared 82 training blocks were used. Full limitations:
+model card §12.
+
 ## 7. Open questions for later phases
 
-- Exact stress threshold and forecast horizon (Phase 7).
+- ~~Exact stress threshold and forecast horizon (Phase 7).~~ **Resolved in Phase 7:** mean raw
+  NDVI anomaly ≤ −0.08 over `t+1`/`t+2`, both weeks `status='ok'` (`docs/phase7-preregistration.md`
+  §1, D-047).
 - Whether a 20 m "hotspot" Gold table is worth the extra volume (propose only if needed).
 - **Open, unexplained (logged at Phase 4 acceptance, 2026-11-11):** on **2021-07-10**
   (36RTV + 36RUV) **36.70 %** of the invalid in-AOI pixels inside NULL cells are DN = 0;

@@ -4,7 +4,8 @@
 
 - **Phase:** 6 — orchestration **CLOSED** (6a accepted earlier, 6b verified on the host on
   2026-11-11). **Season 2024 added and built on 2026-11-12** (see the 2024 bullet below).
-  Phase 7 not started.
+  **Phase 7 — modeling CLOSED 2026-11-13**: S1–S5 run, all three campaigns fail the PR-AUC
+  condition only; model card at [`docs/model-card.md`](docs/model-card.md).
 - **Season 2024 (2026-11-12, run by Ahmed by hand, no flow, no Docker):** config years are now
   `[2019, 2020, 2021, 2022, 2023, 2024]` with `focus: 2023` (commit `701d7b7`). Ingest
   `305 downloaded, 46 skipped, 0 failed` in 4451.5 s; `verify --year 2024` 351/351 assets from
@@ -98,10 +99,12 @@
 - **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
   adopted (2026-11-11) and season 2024 is built through Gold (2026-11-12), but the scheduled flow
   has never run end-to-end on real data. `gold_regression.py` was not re-run after 2024 and the
-  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. Phase 7+ not started.
-- **Next:** nothing is pending inside the 2024 work — ingest, Silver, quality, gate,
-  orbits and Gold are done and committed. Phase 7 starts only on approval for Phase 7. No
-  unverified claim is recorded as fact.
+  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 is closed
+  (2026-11-13); Phase 8+ not started.** S5 has no reliability table because predictions were not
+  persisted — a documented gap, not a pending task.
+- **Next:** nothing is pending inside Phase 7 — the model card, the measured results,
+  the decisions D-047…D-051 and the stale status lines are all written and committed. Phase 8
+  (dashboard) starts only on approval for Phase 8. No unverified claim is recorded as fact.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -114,7 +117,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 4 | Data quality | DONE | All 293 ledger dates / 70,116,072 rows passed critical checks; 58 tests pass; corruption CLI exit 1; DN audit and D-036 onward documented. |
 | 5 | Gold layer | DONE | Weekly gate passed (max 27.54%), anomaly leave-one-out, heatwave ≥40°C/≥3d, orbit cache + diagnostic. 7 new tests; 65 total pass. |
 | 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Real Silver/Gold adopted 2026-11-11 (293 + 15 sidecars, outputs byte-identical). Open: scheduled flow never run on real data, container concurrency, heartbeat, uv tag pin. |
-| 7 | Modeling | TODO | Baseline computed from training years only |
+| 7 | Modeling | DONE | S1 14,977,696 rows; B0–B3 (`8b0164b`, `770d885`, `98938ce`); S3 `ace7352` 0.8213705 vs bar 0.8222002; S4 `68215bd` 0.8191470 vs bar 0.8205095; S5 `2a30b52` 0.8007195 vs bar 0.8147217. **All three FAIL on PR-AUC only**; P@R.5 and Brier pass. Model card `docs/model-card.md`. |
 | 8 | Dashboard | TODO | |
 | 9 | Packaging and documentation | TODO | |
 
@@ -393,3 +396,79 @@ Stopped as required; no gap threshold/config or checks implemented.
   SCL cause classification is observational; reports/raw data are local and
   gitignored; Phase 3 test 7 still needs its persisted real-data artifact.
 - No Gold tables, orchestration, modeling or Silver rebuild. Phase 5 not started.
+
+## Phase 7 completion — 2026-11-13 (models)
+
+Pre-registration: [`docs/phase7-preregistration.md`](docs/phase7-preregistration.md), frozen
+2026-11-12 before any baseline or model was run. Full record:
+[`docs/model-card.md`](docs/model-card.md). All numbers below are quoted from
+`artifacts/phase7/*.json`; artifacts are gitignored and never committed.
+
+**S1 — dataset and labels (`5651bfc`).** Target: mean **raw** NDVI anomaly over `t+1`/`t+2`
+≤ **−0.08**, both weeks `status='ok'` (D-047). 14,977,696 usable rows, 2,933,974 positives
+(19.59 %). Per season: 2019 2,519,921 / 16.18 %; 2020 2,728,392 / 18.41 %; 2021 2,681,558 /
+22.73 %; 2022 2,589,333 / 21.07 %; 2023 1,431,931 / 15.21 %; 2024 3,026,561 / 21.51 % (test).
+29.06 s, 3,266.5 MB.
+
+**S2 — baselines B0–B3 (`8b0164b`, `770d885`, `98938ce`).** On S3 `cropland/pooled`, PR-AUC:
+B0 0.2508243, B1 0.7589650, B2 0.2819829, **B3 0.7722002** (P@R.5 0.8145373, Brier 0.1050482).
+B3 is the reference for every verdict. `770d885` added B3's missing intercept: ranking unchanged,
+Brier 0.1929 → 0.1050, mean predicted probability 0.519 → calibrated (D-048). Onset baselines in
+`98938ce`; 557.37 s + 320.55 s, 4,393.8 MB.
+
+**S3 — temporal split, test 2024 (`fb54129` freeze, `ace7352` run).** Bar 0.8222002 /
+0.8145373 / 0.1050482. `full` 0.8213705 / 0.8713148 / 0.0936884 → **FAIL**, misses PR-AUC by
+**0.0008298**; `ndvi_only` 0.8235561 / 0.8740270 / 0.0924261 → passes all three. 1,513.12 s,
+9,402.8 MB.
+
+**S4 — leave-one-season-out, six folds (`675eb4c` freeze, `68215bd` run).** Bar 0.8205095 /
+0.8187709 / 0.0947832, derived on the six-fold mean, not reused from S3 (D-049). `full`
+0.8191470 / 0.8754861 / 0.0835801 → **FAIL**, misses by **0.0013625**; `ndvi_only` 0.8235976 /
+0.8812944 / 0.0824871 → passes all three. B3 mean 0.7705095 (std 0.0358198). `loso-2024`
+reproduces S3 exactly (pipeline-consistency check). 9,020.29 s, 9,616.7 MB.
+
+**S5 — spatial holdout on 5 km blocks (`6fd4226` freeze, `2a30b52` run).** Partition frozen:
+28 of 110 blocks held out, `default_rng(20260702)` (D-050); B3 refit on S5 training rows (D-049).
+Test 596,174 rows / 144,091 positives. Bar 0.8147217 / 0.8070753 / 0.1036731. `full` 0.8007195 /
+0.8436102 / 0.0960768 → **FAIL**, misses by **0.0140022**; `ndvi_only` 0.8042603 / 0.8470021 /
+0.0942075 → **FAIL** by 0.0104614. Block bootstrap 1000/1000 usable draws: full PR-AUC
+[0.7818991, 0.8211190], ndvi_only [0.7863661, 0.8239851]; the bar lies inside both intervals and
+above both point estimates. Paired `full − B3` PR-AUC **+0.0360180** [+0.0276012, +0.0438191].
+2,056.22 s, 8,615.9 MB.
+
+**Onset headline (separate, not a verdict).** S5 `cropland/onset` 442,124 rows / 42,473 positives
+(prevalence 0.0961): `full` 0.3929923 vs B3 0.3203791. S5 `all/onset`: 0.3839020 vs 0.2932640.
+S3 onset: 0.4373937 vs 0.3205508. S4 onset mean: 0.4228700 vs 0.3084870.
+
+**No weather effect is claimed.** `ndvi_only` beats `full` on all three campaigns
+(0.8235561 > 0.8213705; 0.8235976 > 0.8191470; 0.8042603 > 0.8007195) and has the lower Brier
+each time. Weather is one grid point (~120 independent weeks).
+
+**Sanity controls passed in every campaign.** XGBoost on the three B3 features clears its frozen
+floor `B3 − 0.02` in every campaign and every fold (S3 0.7962004 vs 0.7722002; S5 0.7828792 vs
+0.7647217); permuted labels score at prevalence (S3 gap 0.0003802; S5 gap 0.0008192). No leakage
+was detected.
+
+**Documented gaps, not tasks.**
+- S5 has **no reliability table**: predictions were not persisted (`prediction` and `reliab`
+  occur 0 times in `xgb_spatial.json`, no prediction files under `artifacts/` or `data/`, and
+  `run_spatial_fold` keeps arrays in memory). No re-run was performed, so S5 calibration is
+  unmeasured. S3 and S4 have full 10-bin tables.
+- S5 declared 28 held-out blocks, 27 were scorable (`80009` has no `cropland/pooled` 2024 row);
+  78 of the declared 82 training blocks carried rows.
+- The 600-round cap binds in `loso-2021`/`loso-2022` and nearly binds in S5 (593 and 599 of 600,
+  `hit_cap: false`); left unchanged (D-051).
+- 2024 has 145,406 rows (4.80 %) at `week_index = 2` and no training season has any, so those
+  predictions are an extrapolation and account for the whole 4.711 % `temp_max_mean_c_lag2`
+  test missingness.
+
+**Tests.** `.venv/bin/python -m pytest -q` → **191 passed, 1 deselected in 25.68 s**. Phase 7
+coverage lives in `tests/test_models.py`, `tests/test_baselines.py`, `tests/test_spatial.py`,
+`tests/test_train.py`.
+
+**Limitations.** All three campaigns miss the pre-registered PR-AUC bar; S5 is a single test year
+(2024, the most extreme season); S5 held-out blocks still use their own 2019–2023 climatology, so
+it is new locations with known history, not cold start; block bootstrap weights 27 unequal blocks
+equally (253–34,075 rows each); 2023 lag missingness reaches 73.414 % (`ndvi_roll3`) when it is the
+held-out season; harvest and irrigation are unobserved confounders. No Phase 8 dashboard work was
+started.
