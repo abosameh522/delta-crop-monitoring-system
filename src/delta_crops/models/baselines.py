@@ -183,12 +183,19 @@ def _logistic_features(frame) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _fit_b3(train, labels: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
-    """Return (beta, mean, std, imputation) for B3, fitted on train only."""
+    """Return (beta, mean, std, imputation) for B3, fitted on train only.
+
+    ``beta`` includes an intercept as its first element. The intercept matters:
+    standardised features have mean zero, so without it ``sigmoid(0) = 0.5``
+    instead of the training prevalence, which destroys calibration while
+    leaving the ranking (and therefore ROC-AUC / PR-AUC) unchanged.
+    """
     x = _logistic_features(train)
     imputation = float(np.nanmedian(x[:, 1])) if np.isfinite(x[:, 1]).any() else 0.0
     x[~np.isfinite(x)] = imputation
     standardised, _ = _standardise(x, x)
-    beta = fit_logistic(standardised, labels)
+    design = np.column_stack([np.ones(len(standardised)), standardised])
+    beta = fit_logistic(design, labels)
     return beta, np.nanmean(x, axis=0), np.nanstd(x, axis=0), imputation
 
 
@@ -197,7 +204,8 @@ def _score_b3(train, test, beta: np.ndarray, mean: np.ndarray, std: np.ndarray,
     x = _logistic_features(test)
     x[~np.isfinite(x)] = imputation
     std = np.where(std == 0, 1.0, std)
-    z = ((x - mean) / std) @ beta
+    design = np.column_stack([np.ones(len(x)), (x - mean) / std])
+    z = design @ beta
     return 1.0 / (1.0 + np.exp(-np.clip(z, -30.0, 30.0)))
 
 

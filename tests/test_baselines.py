@@ -10,6 +10,8 @@ import pytest
 
 from delta_crops.models.baselines import (
     Group,
+    _fit_b3,
+    _score_b3,
     average_precision,
     brier,
     evaluate_group,
@@ -106,6 +108,17 @@ def test_strata_are_fitted_and_scored_within_the_stratum() -> None:
     assert complete["rows_train"] + incomplete["rows_train"] == len(train)
     assert complete["rows_test"] + incomplete["rows_test"] == len(test)
     assert complete["rows_train"] > 0 and incomplete["rows_train"] > 0
+
+
+def test_b3_has_an_intercept_and_is_calibrated() -> None:
+    train = _synthetic_frame(4000)
+    test = _synthetic_frame(2000, seed=11)
+    labels = train["label"].to_numpy(dtype=np.int64)
+    beta, mean, std, imputation = _fit_b3(train, labels)
+    assert len(beta) == 4  # intercept + three features
+    probability = _score_b3(train, test, beta, mean, std, imputation)
+    # Without the intercept this sits near 0.5 regardless of the base rate.
+    assert probability.mean() == pytest.approx(test["label"].mean(), abs=0.03)
 
 
 def test_split_rejects_a_test_season_in_training() -> None:
