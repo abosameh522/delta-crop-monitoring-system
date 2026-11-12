@@ -217,6 +217,17 @@ def _score_b3(train, test, beta: np.ndarray, mean: np.ndarray, std: np.ndarray,
     return 1.0 / (1.0 + np.exp(-np.clip(z, -30.0, 30.0)))
 
 
+def b3_scores(train_group, test_group) -> np.ndarray:
+    """Fit B3 on the training rows of one group and return its test probabilities.
+
+    Exposed so the block-bootstrap can pair B3 and M on the same resampled
+    blocks instead of comparing two unrelated point estimates.
+    """
+    y_train = train_group["label"].to_numpy(dtype=np.int64)
+    beta, mean, std, imputation = _fit_b3(train_group, y_train)
+    return _score_b3(train_group, test_group, beta, mean, std, imputation)
+
+
 def group_mask(frame, group: Group) -> np.ndarray:
     mask = np.ones(len(frame), dtype=bool)
     if group.population == "cropland":

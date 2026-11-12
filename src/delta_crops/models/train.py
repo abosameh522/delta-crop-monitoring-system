@@ -25,6 +25,7 @@ import xgboost as xgb
 from delta_crops.config import Config, load_config
 from delta_crops.models.baselines import (
     Group,
+    b3_scores,
     group_mask,
     score_metrics,
 )
@@ -35,6 +36,14 @@ from delta_crops.models.dataset import (
     connect,
     loso_splits,
     temporal_split,
+)
+from delta_crops.models.spatial import (
+    BOOTSTRAP_SEED,
+    all_block_ids,
+    block_bootstrap,
+    partition_blocks,
+    per_block_metrics,
+    spatial_frames,
 )
 
 SEED = 20260701
@@ -72,7 +81,7 @@ REPORT_GROUPS = (
 )
 
 METADATA_COLUMNS = ("year", "split", "cell_id", "week_start", "label",
-                    "is_cropland", "anomaly_t", "anomaly_lag1")
+                    "is_cropland", "anomaly_t", "anomaly_lag1", "block_5km")
 TARGET_RECALL = 0.5
 
 assert len(FULL_FEATURES) == 26, len(FULL_FEATURES)
@@ -415,6 +424,228 @@ def run_fold(root: Path, config: Config, split: Split, plan: FitPlan,
     return result
 
 
+def run_spatial_fold(root: Path, config: Config, split: Split, plan: FitPlan,
+                     selected: dict[str, list[str]], temp_dir: Path,
+                     skip_sanity: bool) -> dict[str, Any]:
+    """S5: fit on the training blocks of 2019-2023, score 2024 held-out blocks.
+
+    Every number here is frozen by section 5.5 of the pre-registration. The
+    baseline is refit on exactly these training rows so the verdict compares
+    like with like; nothing is read from the S3/S4 all-block baselines.
+    """
+    started = time.perf_counter()
+    print(f"split {split.name}: fit {plan.fit_years}, validation {plan.validation_year}, "
+          f"refit {plan.final_years}, test {split.test_year} (held-out 5 km blocks)",
+          flush=True)
+
+    all_rows = load_frames(root, config, split, temp_dir)
+    # The frozen partition is over the AOI lattice, not over loaded rows.
+    partition = partition_blocks(all_block_ids(root))
+    train, test = spatial_frames(all_rows, partition, split.test_year)
+    del all_rows
+    fit, validation = split_fit_validation(train, plan)
+    print(f"blocks train {len(partition.train_blocks)} held-out {len(partition.held_out_blocks)} "
+          f"| rows train {len(train):,} fit {len(fit):,} validation {len(validation):,} "
+          f"test {len(test):,}", flush=True)
+    print(f"test blocks {sorted(int(b) for b in test['block_5km'].unique())}", flush=True)
+
+    variants: dict[str, Any] = {}
+    predictions: dict[str, np.ndarray] = {}
+    for name, features in selected.items():
+        variant_started = time.perf_counter()
+        booster, rounds, history = fit_with_early_stopping(fit, validation, features)
+        final_model = refit(train, features, rounds)
+        prediction = predict(final_model, test, features)
+        predictions[name] = prediction
+        groups = evaluate_predictions(test, prediction)
+        cropland = group_mask(test, REPORT_GROUPS[0])
+        variants[name] = {
+            "features": list(features),
+            "rounds": {
+                "best_iteration": rounds - 1,
+                "best_round": rounds,
+                "hit_cap": bool(rounds >= MAX_ROUNDS),
+                "best_validation_pr_auc": float(booster.best_score),
+                "rounds_run": len(history.get("validation", {}).get("aucpr", [])),
+            },
+            "groups": groups,
+            "missingness_train": missingness(train, features),
+            "missingness_test": missingness(test, features),
+            "importance_gain_top15": top_importance(final_model, features),
+            "seconds": round(time.perf_counter() - variant_started, 2),
+        }
+        print(f"variant {name}: best round {rounds}"
+              f"{' (CAP)' if rounds >= MAX_ROUNDS else ''} "
+              f"(validation PR-AUC {booster.best_score:.4f}), "
+              f"{variants[name]['seconds']}s", flush=True)
+        del booster, final_model, prediction, history
+        release_memory()
+
+    # The baseline is refit on the S5 training rows and scored on the S5 test
+    # rows, inside each reported population exactly as baselines.py does it.
+    b3_predictions: dict[str, np.ndarray] = {}
+    b3_metrics: dict[str, dict[str, Any]] = {}
+    for group in REPORT_GROUPS:
+        train_group = train.loc[group_mask(train, group)]
+        group_test = test.loc[group_mask(test, group)]
+        scores = b3_scores(train_group, group_test)
+        full = np.full(len(test), np.nan)
+        full[group_mask(test, group)] = scores
+        b3_predictions[group.name] = full
+        y_group = group_test["label"].to_numpy(dtype=np.int64)
+        b3_metrics[group.name] = score_metrics(
+            y_group, scores, float(y_group.mean()), scores)
+        for variant in selected:
+            entry = variants[variant]["groups"].get(group.name, {})
+            if entry.get("models"):
+                entry["models"]["B3"] = b3_metrics[group.name]
+    head_b3 = b3_metrics[REPORT_GROUPS[0].name]
+    print(f"B3 refit on S5 rows (cropland/pooled): PR-AUC {head_b3['pr_auc']:.4f} "
+          f"(rows {head_b3['rows']:,}, positives {head_b3['positives']:,})", flush=True)
+
+    headline_mask = group_mask(test, REPORT_GROUPS[0])
+    predictions["B3"] = b3_predictions[REPORT_GROUPS[0].name]
+    per_block = per_block_metrics(test, predictions["full"], headline_mask)
+    bootstrap = block_bootstrap(test, predictions, headline_mask)
+    onset_entries: dict[str, Any] = {}
+    for onset_group in REPORT_GROUPS[4:]:
+        mask = group_mask(test, onset_group)
+        y = test.loc[mask, "label"].to_numpy(dtype=np.int64)
+        entry: dict[str, Any] = {"rows": int(len(y)),
+                                 "positives": int(y.sum()),
+                                 "prevalence": float(y.mean()) if len(y) else None,
+                                 "models": {}}
+        for name in selected:
+            prediction = predictions[name][mask]
+            entry["models"][name] = score_metrics(
+                y, prediction, float(y.mean()), prediction)
+        entry["models"]["B3"] = b3_metrics[onset_group.name]
+        if len(y) and 0 < y.sum() < len(y):
+            predictions["B3"] = b3_predictions[onset_group.name]
+            entry["bootstrap"] = block_bootstrap(test, predictions, mask)
+        onset_entries[onset_group.name] = entry
+
+    sanity: dict[str, Any] = {}
+    if not skip_sanity:
+        # (i) XGBoost on the three B3 features must match the *S5* B3 refit.
+        booster3, rounds3, _ = fit_with_early_stopping(fit, validation, B3_FEATURES)
+        model3 = refit(train, B3_FEATURES, rounds3)
+        prediction3 = predict(model3, test, B3_FEATURES)
+        y_head = test.loc[headline_mask, "label"].to_numpy(dtype=np.int64)
+        m3 = score_metrics(y_head, prediction3[headline_mask], float(y_head.mean()),
+                           prediction3[headline_mask])
+        floor = head_b3["pr_auc"] - 0.02
+        sanity["b3_features"] = {
+            "features": B3_FEATURES, "rounds": rounds3,
+            "pr_auc": m3["pr_auc"], "b3_pr_auc": head_b3["pr_auc"],
+            "floor": floor, "passed": bool(m3["pr_auc"] >= floor),
+        }
+        if not sanity["b3_features"]["passed"]:
+            raise RuntimeError(f"{split.name} B3-feature sanity failed: "
+                               f"{m3['pr_auc']:.4f} < {floor:.4f}")
+        del booster3, model3, prediction3
+        release_memory()
+
+        # (ii) Labels permuted within each training season, test permuted separately.
+        train_permuted = permute_within_season(train, SEED)
+        test_permuted = permute_within_season(test, SEED + 1)
+        fit_permuted = train_permuted[train["year"].to_numpy() != plan.validation_year]
+        validation_permuted = train_permuted[train["year"].to_numpy() == plan.validation_year]
+        booster_p, rounds_p, _ = fit_with_early_stopping(
+            fit, validation, FULL_FEATURES,
+            fit_labels=fit_permuted, validation_labels=validation_permuted)
+        model_p = refit(train, FULL_FEATURES, rounds_p, labels_override=train_permuted)
+        prediction_p = predict(model_p, test, FULL_FEATURES)
+        y_permuted = test_permuted[headline_mask]
+        ap = score_metrics(y_permuted, prediction_p[headline_mask],
+                           float(y_permuted.mean()),
+                           prediction_p[headline_mask])["pr_auc"]
+        prevalence = float(y_permuted.mean())
+        sanity["permuted_labels"] = {
+            "pr_auc": ap, "prevalence": prevalence, "rounds": rounds_p,
+            "absolute_gap": abs(ap - prevalence),
+            "passed": bool(abs(ap - prevalence) <= 0.01),
+        }
+        if not sanity["permuted_labels"]["passed"]:
+            raise RuntimeError(f"{split.name} permuted-label sanity failed: "
+                               f"{ap:.4f} vs {prevalence:.4f}")
+        print(f"sanity {split.name}:", json.dumps(sanity), flush=True)
+        del booster_p, model_p, prediction_p
+        release_memory()
+
+    result = {
+        "split": {"name": split.name, "train_years": list(split.train_years),
+                  "test_year": split.test_year},
+        "plan": {"fit_years": list(plan.fit_years),
+                 "validation_year": plan.validation_year,
+                 "final_years": list(plan.final_years)},
+        "partition": partition.as_dict(),
+        "test_blocks_observed": sorted(int(b) for b in test["block_5km"].unique()),
+        "train_blocks_observed": sorted(int(b) for b in train["block_5km"].unique()),
+        "heldout_blocks_without_scored_rows": sorted(
+            set(partition.held_out_blocks) - {int(b) for b in test["block_5km"].unique()}),
+        "train_blocks_without_rows": sorted(
+            set(partition.train_blocks) - {int(b) for b in train["block_5km"].unique()}),
+        "rows": {"train": int(len(train)), "fit": int(len(fit)),
+                 "validation": int(len(validation)), "test": int(len(test)),
+                 "test_decision_population": int(head_b3["rows"])},
+        "baseline_b3_refit_s5": head_b3,
+        "baseline_b3_refit_s5_by_group": b3_metrics,
+        "variants": variants,
+        "per_block_cropland_pooled": per_block,
+        "bootstrap_cropland_pooled": bootstrap,
+        "onset": onset_entries,
+        "sanity": sanity,
+        "week_index_test": (
+            test.groupby("week_index")["label"].agg(["size", "mean"]).reset_index()
+            .rename(columns={"size": "rows", "mean": "positive_rate"}).to_dict("records")
+        ),
+        "seconds": round(time.perf_counter() - started, 2),
+    }
+    del train, test, fit, validation
+    release_memory()
+    print(f"{split.name} done in {result['seconds']}s, process peak RSS so far "
+          f"{resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0:.0f} MB",
+          flush=True)
+    return result
+
+
+def summarise_spatial(fold: dict[str, Any], variants: list[str]) -> dict[str, Any]:
+    """The frozen S5 verdict: point estimates plus block-bootstrap intervals."""
+    headline = "cropland/pooled"
+    bootstrap = fold["bootstrap_cropland_pooled"]["metrics"]
+    b3 = fold["baseline_b3_refit_s5"]
+    checks: dict[str, Any] = {}
+    for variant in variants:
+        point = fold["variants"][variant]["groups"][headline]["models"]["M"]
+        interval = bootstrap[variant]
+        checks[variant] = {
+            "point": {metric: point[metric] for metric in
+                      ("pr_auc", "precision_at_recall_0_5", "brier")},
+            "bootstrap": interval,
+            "pr_auc_bar": b3["pr_auc"] + 0.05,
+            "pr_auc_passed": bool(point["pr_auc"] >= b3["pr_auc"] + 0.05),
+            "p_at_r_5_bar": b3["precision_at_recall_0_5"],
+            "p_at_r_5_passed": bool(
+                point["precision_at_recall_0_5"] > b3["precision_at_recall_0_5"]),
+            "brier_bar": b3["brier"],
+            "brier_passed": bool(point["brier"] < b3["brier"]),
+        }
+        checks[variant]["all_passed"] = bool(
+            checks[variant]["pr_auc_passed"]
+            and checks[variant]["p_at_r_5_passed"]
+            and checks[variant]["brier_passed"])
+    return {
+        "headline": headline,
+        "reference": "B3 refit on the S5 training rows, scored on the 2024 held-out blocks",
+        "b3": {metric: b3[metric] for metric in
+               ("pr_auc", "precision_at_recall_0_5", "brier")},
+        "variants": checks,
+        "paired_difference_full_minus_B3": (
+            fold["bootstrap_cropland_pooled"]["paired_difference_full_minus_B3"]),
+    }
+
+
 def _summary(values: list[float]) -> dict[str, float] | None:
     clean = [float(value) for value in values if value is not None]
     if not clean:
@@ -573,11 +804,62 @@ def loso_table(summary: dict[str, Any], variants: list[str]) -> str:
     return "\n".join(lines)
 
 
+def spatial_table(report: dict[str, Any]) -> str:
+    """S5: point estimate, block-bootstrap interval and the frozen bar per view."""
+    def fmt(value, digits=4):
+        return "n/a" if value is None else f"{value:.{digits}f}"
+
+    metrics = report["bootstrap_cropland_pooled"]["metrics"]
+    lines = [
+        f"S5 spatial holdout: train blocks {report['partition']['n_train_blocks']} "
+        f"({report['split']['train_years']}), test blocks "
+        f"{report['partition']['n_heldout_blocks']} (2024)",
+        f"bootstrap {report['bootstrap_cropland_pooled']['draws_usable']}/"
+        f"{report['bootstrap_cropland_pooled']['draws_requested']} usable draws over "
+        f"{len(report['bootstrap_cropland_pooled']['blocks'])} blocks, 95% percentile",
+        f"{'group':20s} {'model':10s} {'PR-AUC':>8s} {'[2.5':>8s} {'97.5]':>8s} "
+        f"{'P@R.5':>7s} {'Brier':>7s}",
+    ]
+    for group in report["variants"]["full"]["groups"]:
+        for model in ("B3", "full", "ndvi_only"):
+            point = (report["baseline_b3_refit_s5_by_group"].get(group)
+                     if model == "B3" else
+                     report["variants"][model]["groups"].get(group, {})
+                     .get("models", {}).get("M"))
+            if not point:
+                continue
+            interval = metrics.get(model, {}).get("pr_auc") if model != "B3" else None
+            lines.append(
+                f"{group:20s} {model:10s} {fmt(point['pr_auc']):>8s} "
+                f"{fmt(interval['p2_5']) if interval else 'n/a':>8s} "
+                f"{fmt(interval['p97_5']) if interval else 'n/a':>8s} "
+                f"{fmt(point['precision_at_recall_0_5']):>7s} "
+                f"{fmt(point['brier']):>7s}"
+            )
+        lines.append("")
+    lines.append("onset (separate headline, no effect on the verdict)")
+    for name, entry in report["onset"].items():
+        for model, point in entry["models"].items():
+            lines.append(
+                f"{name:20s} {model:10s} {fmt(point['pr_auc']):>8s} "
+                f"{'':>8s} {'':>8s} {fmt(point['precision_at_recall_0_5']):>7s} "
+                f"{fmt(point['brier']):>7s}"
+            )
+    lines.append("")
+    for metric, interval in report["summary"]["paired_difference_full_minus_B3"].items():
+        lines.append(f"paired M-full - B3 {metric:26s} "
+                     f"{fmt(interval['mean']) if interval else 'n/a':>8s} "
+                     f"[{fmt(interval['p2_5']) if interval else 'n/a'}, "
+                     f"{fmt(interval['p97_5']) if interval else 'n/a'}]")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-dir", default=None)
-    parser.add_argument("--split", choices=("temporal", "loso", "all"), default="temporal")
+    parser.add_argument("--split", choices=("temporal", "loso", "spatial", "all"),
+                        default="temporal")
     parser.add_argument("--variant", choices=(*VARIANTS, "all"), default="all")
     parser.add_argument("--out", default="artifacts/phase7")
     parser.add_argument("--baselines", default="artifacts/phase7/baselines_metrics.json")
@@ -621,6 +903,47 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"seconds": temporal["seconds"],
                           "peak_rss_mb": temporal["peak_rss_mb"],
                           "out": str(path)}), flush=True)
+
+    if args.split in ("spatial", "all"):
+        split = temporal_split(config.seasons.years)
+        plan = temporal_plan(split.train_years)
+        fold = run_spatial_fold(root, config, split, plan, selected, temp_dir,
+                               args.skip_sanity)
+        summary = summarise_spatial(fold, list(selected))
+        spatial = {
+            "seed": SEED,
+            "spatial_seed": fold["partition"]["seed"],
+            "bootstrap_seed": BOOTSTRAP_SEED,
+            "params": params,
+            "split": fold["split"],
+            "plan": fold["plan"],
+            "partition": fold["partition"],
+            "test_blocks_observed": fold["test_blocks_observed"],
+            "train_blocks_observed": fold["train_blocks_observed"],
+            "heldout_blocks_without_scored_rows": fold["heldout_blocks_without_scored_rows"],
+            "train_blocks_without_rows": fold["train_blocks_without_rows"],
+            "rows": fold["rows"],
+            "baseline_b3_refit_s5": fold["baseline_b3_refit_s5"],
+            "baseline_b3_refit_s5_by_group": fold["baseline_b3_refit_s5_by_group"],
+            "variants": fold["variants"],
+            "per_block_cropland_pooled": fold["per_block_cropland_pooled"],
+            "bootstrap_cropland_pooled": fold["bootstrap_cropland_pooled"],
+            "onset": fold["onset"],
+            "sanity": fold["sanity"],
+            "week_index_test": fold["week_index_test"],
+            "summary": summary,
+            "seconds": fold["seconds"],
+            "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                                 / 1024.0, 1),
+        }
+        path = out_dir / "xgb_spatial.json"
+        path.write_text(json.dumps(spatial, indent=2, default=float) + "\n",
+                        encoding="utf-8")
+        print(spatial_table(spatial), flush=True)
+        print(json.dumps({"verdict": summary["variants"],
+                          "seconds": spatial["seconds"],
+                          "peak_rss_mb": spatial["peak_rss_mb"],
+                          "out": str(path)}, indent=2, default=float), flush=True)
 
     if args.split in ("loso", "all"):
         folds = []
