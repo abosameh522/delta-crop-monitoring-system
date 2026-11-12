@@ -102,6 +102,56 @@ Added **after the B0–B3 baseline results were seen, but before any model resul
   given a currently unstressed cell, which one becomes stressed next?
 * The decision rule in §5.1 is unchanged by this secondary analysis.
 
+### 5.3 S3 execution freeze (2026-11-12, before any model was trained)
+
+Written **before any XGBoost model was fitted or scored**. No model result has
+been seen at the time of this commit.
+
+**(a) Frozen hyperparameters.** `hist`, `binary:logistic`, `max_depth = 6`,
+`eta = 0.05`, `num_boost_round ≤ 600`, `seed = 20260701`, early-stopping
+patience **50** rounds on `aucpr`. Nothing is tuned on the test season and no
+hyperparameter is changed after seeing any result.
+
+**(b) Early stopping and refit.** For the temporal split, fit on 2019–2022 with
+season **2023** as the validation set, take the best iteration, then **refit on
+all of 2019–2023** with that number of rounds and score 2024 **once** per model
+variant. 2023 is the thinnest season (about 1.43 M usable rows).
+
+**(c) One model, many views.** M is trained **once on all training rows**
+(XGBoost handles missing values natively). It is then evaluated per stratum
+(pooled, all-lags-present, at-least-one-lag-missing), per population (cropland
+headline, all cells) and on the onset subset (`anomaly_t > −0.08`). **M is not
+retrained per stratum or per subset.**
+
+**(d) Numerical bar (computed from `artifacts/phase7/baselines_metrics.json`).**
+On `cropland/pooled` temporal, the best baseline is **B3**: PR-AUC **0.7722**,
+precision at recall 0.50 **0.8145**, Brier **0.1050**. M must therefore reach
+**PR-AUC ≥ 0.8222**, **precision at recall 0.50 > 0.8145** and
+**Brier < 0.1050**. All three conditions must hold.
+
+**(e) Ablation variants.** Both variants use identical folds and the same
+frozen hyperparameters.
+
+* `ndvi_only` (16 columns, **no** weather):
+  `ndvi_mean`, `ndvi_std`, `masked_pct_mean`, `n_obs`, `ndvi_lag1`,
+  `ndvi_lag2`, `ndvi_lag3`, `ndvi_roll2`, `ndvi_roll3`, `ndvi_slope_2w`,
+  `anomaly_t`, `baseline_mean`, `n_baseline_years`, `week_index`,
+  `cropland_pct`, `is_cropland`.
+* `full` (26 columns, all four `FEATURES` groups):
+  the 16 above plus `temp_max_mean_c`, `temp_max_max_c`, `temp_min_mean_c`,
+  `solar_sum_mj_m2`, `precip_sum_mm`, `heatwave_days`,
+  `temp_max_mean_c_lag1`, `temp_max_mean_c_lag2`, `heatwave_days_lag1`,
+  `heatwave_days_2w`.
+
+Weather columns are exactly those 10. A weather effect is claimed **only if**
+`full` beats `ndvi_only` on `cropland/pooled` PR-AUC on 2024. Even then, the
+report must say that weather is a **single grid point shared by all cells**
+(about 120 independent weeks), so a gain is weak evidence of a causal weather
+effect.
+
+**(f) Feature importance** may be printed for information (gain, top 15) but is
+**not** interpreted causally.
+
 ## 6. Splits and evaluation
 
 * **Temporal holdout:** train 2019–2023, test 2024.
