@@ -82,6 +82,16 @@ If any part fails, the report says the model **does not beat the baseline**.
 * 5 km blocks (50 × 50 cells) for block-level PR-AUC and block-bootstrap
   intervals; a **spatial-holdout sensitivity run** trains on 75 % of blocks of
   2019–2023 and tests 2024 on the held-out 25 %.
+* **Strata (added 2026-11-12, before any baseline):** every headline and every
+  secondary metric is also reported on **"all lag features present"** and on
+  **"at least one lag missing"**. A lag feature is any `*lag*` column
+  (`ndvi_lag1..3`, `anomaly_lag1`, `temp_max_mean_c_lag1/2`,
+  `heatwave_days_lag1`). Models B0, B2 and B3 are fitted **within each stratum on
+  training rows only**; the test rows of the same stratum are scored. B1 is
+  parameter-free. This prevents a train/test missingness difference from hiding
+  inside one pooled number.
+* **Reporting rule:** the 2024 result is always shown next to the **week_index
+  distribution** of the test rows.
 * **Ablation:** NDVI-only features vs NDVI+weather features on identical folds.
   **No weather effect is claimed unless the ablation shows a gain on the
   held-out fold.**
@@ -135,5 +145,32 @@ baseline pool.
 * Feature missingness differs by split (e.g. `ndvi_lag3` missing 12.7 % in
   training vs 20.4 % in 2024) because retained early-season rows differ; XGBoost
   handles missing values natively, but the shift is reported.
+* **2024 has 145,406 rows at `week_index = 2` (4.8 % of the season); the
+  training seasons have none at `week_index = 1` and none at `week_index = 2`
+  except a few 2020–2022 rows.** ISO week 19 has zero `status='ok'` cells in
+  every season, and ISO week 20 fails the ≥3-baseline-year gate for a
+  leave-one-out training row (its 4-year pool has at most 2 usable years) while
+  the 2024 test row succeeds with its 5-year pool (2019, 2021, 2023). Because
+  `week_index = 2` has no `week_index = 0` weather week, **all** 145,406 of those
+  rows have `temp_max_mean_c_lag2` missing — this is the entire 4.8 % test
+  missingness. The strata above make this visible instead of pooling it away.
 * Training rows use a 4-year baseline pool and test rows a 5-year pool in the
   temporal split.
+
+## 11. Week-index diagnostic (2026-11-12, read-only)
+
+Rows retained per `week_index` (share of season) on the S1 dataset:
+
+| week_index | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 (test) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 2 | 0 | 0 | 0 | 0 | 0 | 4.80 % (145,406) |
+| 3 | 0 | 6.53 % | 6.65 % | 6.88 % | 0 | 7.34 % |
+| 4 | 7.09 % | 4.57 % | 7.00 % | 6.18 % | 0 | 7.32 % |
+
+First four weeks, 2022 vs 2024 (Gold): ISO week 19 has **zero** `status='ok'`
+cells in both; ISO week 20 is `ok` for 224,775 cells in 2024 but fails the
+3-baseline-year gate for a leave-one-out training row. As a result, the entire
+4.8 % `temp_max_mean_c_lag2` missingness in the test season is the 145,406
+`week_index = 2` rows, and training has none. Cause demonstrated from the data;
+no weather effect is implied.
