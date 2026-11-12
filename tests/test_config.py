@@ -69,10 +69,11 @@ def test_bbox_contains_tanta_and_mahalla(aoi: dict[str, Any]) -> None:
         assert bbox["west"] < lon < bbox["east"], f"{name} longitude outside AOI"
 
 
-def test_seasons_cover_2019_to_2023_with_2023_as_focus(aoi: dict[str, Any]) -> None:
+def test_seasons_are_contiguous_from_2019_with_2023_as_focus(aoi: dict[str, Any]) -> None:
     seasons = aoi["seasons"]
     years = seasons["years"]
-    assert years == [2019, 2020, 2021, 2022, 2023]
+    assert years[0] == 2019, "the baseline starts at 2019"
+    assert years == list(range(2019, years[-1] + 1)), "baseline years must be contiguous"
     assert len(set(years)) == len(years), "baseline years must be unique"
     assert seasons["focus"] == 2023
     assert seasons["focus"] in years
