@@ -17,9 +17,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.40",
+    "plotly>=5.24",
+]
 dev = [
     "pytest>=8.0",
 ]
+
+[project.scripts]
+delta-crops-dashboard = "delta_crops.dashboard.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

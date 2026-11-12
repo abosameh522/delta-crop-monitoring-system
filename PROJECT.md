@@ -607,6 +607,53 @@ priority (no averaging) stands. The full-series numbers are in `data/silver/_rep
 
 ---
 
+### 3.16 Dashboard (Phase 8)
+
+The dashboard is a **read-only** consumer: Gold tables, the published pipeline-health summary, and
+the frozen Phase 7 artifacts. It never runs a pipeline stage, never recomputes a check, and never
+writes to `data/` (enforced by a single-SELECT SQL guard and a test that snapshots the lake's
+mtimes across all four pages).
+
+```bash
+python -m delta_crops.dashboard.health   # publish data/gold/_reports/pipeline_health.json
+delta-crops-dashboard                    # http://localhost:8501
+```
+
+**Pipeline Health is a projection, not a new check (Option A).** Phase 4 reports live under
+`data/silver/_reports/quality/` and the Gold gate under `data/gold/_reports/`, but the dashboard may
+read only Gold. `dashboard/health.py` therefore reads the two newest reports (sorted by run id,
+which starts with a UTC timestamp) and writes one compact summary with no wall-clock field, so a
+rerun produces byte-identical output. The quality and gate code is untouched.
+
+**Pages.** Map (weekly NDVI or anomaly on 1 km blocks), Season (cropland-mean NDVI vs Tmax, plus
+heatwave/rainfall bars), Predictions (S3 probability map, scoreboard, calibration), Pipeline Health
+(quality checks, season gaps, Gold gate, model status, S5 gap).
+
+**1 km blocks.** 239,304 cells per week is too many polygons for a browser map, so cells are
+aggregated into 10 × 10 blocks of the 100 m grid (2,483 blocks in the AOI, 2,459 cropland in
+2024-07-01), each drawn as the envelope of its cell centroids plus half a cell. The weekly value is
+the mean over `status = 'ok'` cells, so an empty block means no usable observation, not zero
+vegetation.
+
+**Predictions cover 17 weeks, the map 20.** Gold holds 20 weeks for 2024 (2024-05-06 →
+2024-09-16). The frozen S3 target needs the mean anomaly over `t+1` and `t+2`, so a cell-week is
+scorable only when both weeks exist: `2024-09-09` and `2024-09-16` have no `t+2` inside the season,
+and `2024-05-06` has no anomaly at all (0 of 239,304 cells — no baseline years for that ISO week).
+The Predictions page states this in place; no week is padded or interpolated. On 2024-07-01 that is
+2,309 of 2,459 cropland blocks with a prediction.
+
+**S5 calibration stays a documented gap.** `xgb_spatial.json` contains no reliability block and no
+S5 prediction file was ever written, so the Health page reports the gap and does not substitute the
+S3 table for it.
+
+**Known limitations.** The prediction dump is gitignored (`artifacts/`), so a fresh clone must rerun
+`python -m delta_crops.models.predictions` (≈9.4 min, 8.9 GB peak) before the Predictions page
+works; without it the page shows a clear error. The map's block polygons are centroid envelopes, not
+true cell footprints, so block edges are approximate (± half a 100 m cell). No server-side
+authentication is configured: the app is a local demo, not a deployment.
+
+---
+
 ## 4. Repository layout
 
 ```
@@ -626,7 +673,7 @@ priority (no averaging) stands. The full-series numbers are in `data/silver/_rep
 │   ├── orchestration/   # Phase 6: Prefect flow, four tasks, run log
 │   ├── features/        # empty; Phase 7 features live in models/dataset.py
 │   ├── models/          # Phase 7: dataset, baselines, train (temporal/LOSO/spatial)
-│   └── dashboard/       # Phase 8: Streamlit app (empty until then)
+│   └── dashboard/       # Phase 8: Streamlit app, views, read-only loaders
 └── tests/               # pytest suite, one file per concern
 ```
 
@@ -646,6 +693,14 @@ source .venv/bin/activate
 uv pip install -e ".[dev]"
 cp .env.example .env      # optional: only needed if we fall back to CDSE
 pytest -q
+```
+
+Dashboard (Phase 8):
+
+```bash
+uv pip install -e ".[dev,dashboard]"
+python -m delta_crops.dashboard.health   # publish the Gold health summary once
+delta-crops-dashboard                    # http://localhost:8501, from the repo root
 ```
 
 ## 6. Decisions log
@@ -703,6 +758,12 @@ pytest -q
 | D-049 | 2026-11-12 | Verdict bars are "B3 + 0.05 PR-AUC, P@R.5 strictly greater, Brier strictly lower", derived **per campaign** from that campaign's own B3, and never changed after seeing a result | S3's bar (0.8222002 / 0.8145373 / 0.1050482) applies to the single 2024 temporal test. S4 re-derives it on the **mean over six folds** (0.8205095 / 0.8187709 / 0.0947832) because an S3 bar is not an average-over-folds reference, while keeping the 0.05 margin since target, metric and population are unchanged. S5 re-fits B3 on **exactly its own training rows** and scores **exactly its own held-out blocks**, because neither the S3 all-block bar nor the S4 season bar is the right reference for a block-held-out population; the margin stays 0.05 because changing it after two failures would be post-hoc. Result: all three campaigns fail PR-AUC only (S3 by 0.0008298, S4 by 0.0013625, S5 by 0.0140022) and pass P@R.5 and Brier. Freezes in `fb54129`, `675eb4c`, `6fd4226`. |
 | D-050 | 2026-11-12 | S5 spatial holdout uses a **frozen** 5 km block partition: 110 block ids sorted, permuted with `default_rng(20260702)`, first 28 held out (25.45 %), rest train; never re-drawn | `block_5km = (cell_row // 50) * 10000 + (cell_col // 50)`, already materialised by the dataset builder, so the partition is a pure function of the block id list and one seed and is auditable in the artifact. It is not chosen from any result. Held-out blocks contribute no rows of any season to fitting, early stopping or refit, which is the spatial leakage S4 cannot remove. Realised caveats reported, not fixed: 28 declared but 27 blocks scorable (80009 has no cropland/pooled 2024 row) and 4 declared training blocks carry no rows. |
 | D-051 | 2026-11-12 | `num_boost_round ≤ 600` is frozen for S3, S4 **and** S5 and is not raised after seeing a cap hit; cap hits are reported as a property of the run | S4 folds `loso-2021`/`loso-2022` hit the cap (full 596/592, ndvi_only 600/595), so early stopping never fired there. S5 did **not** hit it (full best round 593, ndvi_only 599, `hit_cap: false` of 600 run), but sits within two rounds of it, so a larger cap could plausibly help. Raising the cap after seeing a near-hit would be post-hoc model selection, so it was left unchanged and recorded as a known limitation instead. Every variant uses identical hyperparameters: `hist`, `binary:logistic`, `max_depth=6`, `eta=0.05`, seed 20260701, patience 50 on `aucpr`. |
+| D-052 | 2026-11-13 | Phase 8 prediction dump refits the frozen S3 variants with rounds read from `xgb_temporal.json` (533 / 275), through the Phase 7 loader, behind a 1e-9 gate; nothing is written on a miss | Phase 7 persisted metrics, not predictions, so the dashboard needed one persistence step. Re-running early stopping could pick different rounds; reading the sorted `dataset/temporal.parquet` changes XGBoost's histogram sketch because the builder writes `ORDER BY year, cell_id, week_start`; and fitting anything new would make the dashboard a different model. The dump therefore uses `load_frames` → `build_sql` → `fold_frames` and the stored rounds, and must reproduce all six metrics plus the 2,449,220 / 614,324 counts exactly. Measured: every delta 0.0 (see freeze §6). |
+| D-053 | 2026-11-13 | Pipeline Health uses Option A: a publisher projects the newest Phase 4 quality report and Gold gate report into `data/gold/_reports/pipeline_health.json`; the checks themselves are untouched and no timestamp is written | The dashboard may read only Gold, but the quality evidence lives under `data/silver/_reports/`. Re-running checks would duplicate Phase 4 logic and could disagree with it; moving the reports would rewrite Phase 4's contract. A projection keeps one source of truth. Omitting the wall clock and sorting candidates by `run_id` (a UTC timestamp prefix) makes reruns byte-identical, so publishing cannot create drift. |
+| D-054 | 2026-11-13 | The map aggregates the 100 m grid into 1 km blocks (10 × 10 cells), one polygon per block | A week holds 239,304 cells; drawing each as a polygon is slow in the browser and unreadable at AOI zoom. 1 km keeps within-block heterogeneity visible (2,483 blocks, 2,459 cropland on 2024-07-01), matches the 100 m → 5 km hierarchy used by S5, and stays honest: the value is the mean over `status='ok'` cells, and an empty block means no usable observation, never zero NDVI. Polygons are centroid envelopes ± half a cell, so edges are approximate. |
+| D-055 | 2026-11-13 | Dashboard modules live in `dashboard/views/` with a sidebar `radio`, not Streamlit's `pages/` convention | `pages/` triggers Streamlit's automatic multipage navigation, which cannot be exercised page-by-page in `AppTest` and would give four URLs with no shared state. A radio keeps one entry point (`delta-crops-dashboard`), makes the page choice testable, and keeps paths in one place. |
+| D-056 | 2026-11-13 | The read-only guarantee is enforced by a single-SELECT guard plus an mtime test, not by `duckdb.connect(read_only=True)` | `read_only=True` only applies to a database *file*, and the dashboard deliberately opens none — it queries Parquet. So `_select_only()` refuses any statement that is not one `SELECT`/`WITH`, and a test snapshots the mtimes of `data/` and `artifacts/phase8/` across all four pages and asserts they are unchanged. |
+| D-057 | 2026-11-13 | The Predictions page exposes 17 weeks and says why; the map slider keeps all 20 Gold weeks | Gold has 20 weeks for 2024, but the target needs `t+1` and `t+2` to be observable: `2024-09-09` and `2024-09-16` have no `t+2` inside the season, and `2024-05-06` has no anomaly (0/239,304 cells, no baseline years for that ISO week). Truncating the map slider or padding predictions would hide a real coverage difference; stating it is the honest option and it is pinned by a test. |
 
 ### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
 
@@ -842,6 +903,35 @@ is stated, not hidden.
 S5 calibration is unmeasured. S5 declared 28 held-out blocks but 27 produced scorable rows
 (block 80009 has none) and 78 of the declared 82 training blocks were used. Full limitations:
 model card §12.
+
+### Phase 8 dashboard and measured results
+
+The S3 prediction dump and its gate are frozen in
+[`docs/phase8-predictions-freeze.md`](docs/phase8-predictions-freeze.md); the design is §3.16.
+
+**Dump (measured 2026-11-13).** `artifacts/phase8/predictions/temporal_2024.parquet`: 6,053,122
+rows (3,026,561 per variant), 29.6 MB, 17 weeks (2024-05-13 → 2024-09-02), 225,582 cells, no
+duplicate `(variant, cell_id, week_start)`, probabilities in [6.1e-6, 0.9999]. Refit cost 561.2 s
+with 8,912 MB peak RSS. All ten gate checks matched with **delta 0.0**: `full` 0.8213704513 /
+0.8713148213 / 0.0936884443, `ndvi_only` 0.8235560892 / 0.8740271972 / 0.0924262925, and
+2,449,220 rows / 614,324 positives for both. Re-scoring the written file reproduces the same
+numbers, so the dump is the Phase 7 model, not a lookalike.
+
+**Health publish (measured 2026-11-13).** `python -m delta_crops.dashboard.health` wrote
+`data/gold/_reports/pipeline_health.json` from `quality_20261112T020141Z_47c4a558.json` (status
+`passed`, 16 checks, 352 dates) and `weekly_gate_20261112T020232Z_65b82678.json` (status `passed`);
+two consecutive runs produced identical bytes.
+
+**Pages (verified with `AppTest`).** Map renders 2,483 blocks (2,459 cropland) for 2024-07-01 and
+exposes 20 slider weeks; Season draws NDVI + Tmax and the heatwave/rainfall bars; Predictions shows
+the 17-week slider, the 17-vs-20 explanation, the S3 scoreboard and a 10-bin calibration table;
+Pipeline Health shows the quality checks, season gaps, gate table and the S5 gap. `AppTest`
+additionally asserts that all four pages leave `data/` and `artifacts/phase8/` mtimes untouched, and
+that a dump with `prob = 1.4` is refused with `probabilities outside [0, 1]`. Full suite: **234
+passed, 1 deselected**.
+
+**Not claimed.** No S5 reliability table, no new model, no metric changed by the dashboard. The
+dashboard only displays the frozen Phase 7 result and adds no evidence about crop stress.
 
 ## 7. Open questions for later phases
 

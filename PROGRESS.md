@@ -6,9 +6,10 @@
   2026-11-11). **Season 2024 added and built on 2026-11-12** (see the 2024 bullet below).
   **Phase 7 — modeling CLOSED 2026-11-13**: S1–S5 run, all three campaigns fail the PR-AUC
   condition only; model card at [`docs/model-card.md`](docs/model-card.md).
-  **Phase 8 — dashboard IN PROGRESS (2026-11-13):** prediction-dump freeze at
-  [`docs/phase8-predictions-freeze.md`](docs/phase8-predictions-freeze.md); no dashboard code
-  yet.
+  **Phase 8 — dashboard CLOSED 2026-11-13**: prediction dump, Option A health publish, four
+  Streamlit pages and one-command launch; freeze at
+  [`docs/phase8-predictions-freeze.md`](docs/phase8-predictions-freeze.md), design in PROJECT.md
+  §3.16 and D-052…D-057. Suite `234 passed, 1 deselected`.
 - **Season 2024 (2026-11-12, run by Ahmed by hand, no flow, no Docker):** config years are now
   `[2019, 2020, 2021, 2022, 2023, 2024]` with `focus: 2023` (commit `701d7b7`). Ingest
   `305 downloaded, 46 skipped, 0 failed` in 4451.5 s; `verify --year 2024` 351/351 assets from
@@ -102,13 +103,13 @@
 - **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
   adopted (2026-11-11) and season 2024 is built through Gold (2026-11-12), but the scheduled flow
   has never run end-to-end on real data. `gold_regression.py` was not re-run after 2024 and the
-  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 is closed
-  (2026-11-13); Phase 8 is in progress.** S5 has no reliability table because predictions were not
-  persisted — a documented gap, not a pending task.
-- **Next:** the prediction dump is **done and verified** —
-  `artifacts/phase8/predictions/temporal_2024.parquet` (6,053,122 rows, 29.6 MB) reproduces the S3
-  metrics with **zero delta** on all ten gate checks. Dashboard code starts only on the user's
-  `next`.
+  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 and Phase 8
+  are closed (2026-11-13).** S5 has no reliability table because predictions were not persisted —
+  a documented gap, not a pending task, and the Health page shows it as one.
+- **Next:** nothing is pending. The prediction dump
+  (`artifacts/phase8/predictions/temporal_2024.parquet`, 6,053,122 rows, 29.6 MB) reproduces S3 with
+  zero delta on all ten gate checks; the dashboard is `delta-crops-dashboard`; the health summary is
+  published. Phase 9 starts only on approval for Phase 9.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -122,7 +123,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 5 | Gold layer | DONE | Weekly gate passed (max 27.54%), anomaly leave-one-out, heatwave ≥40°C/≥3d, orbit cache + diagnostic. 7 new tests; 65 total pass. |
 | 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Real Silver/Gold adopted 2026-11-11 (293 + 15 sidecars, outputs byte-identical). Open: scheduled flow never run on real data, container concurrency, heartbeat, uv tag pin. |
 | 7 | Modeling | DONE | S1 14,977,696 rows; B0–B3 (`8b0164b`, `770d885`, `98938ce`); S3 `ace7352` 0.8213705 vs bar 0.8222002; S4 `68215bd` 0.8191470 vs bar 0.8205095; S5 `2a30b52` 0.8007195 vs bar 0.8147217. **All three FAIL on PR-AUC only**; P@R.5 and Brier pass. Model card `docs/model-card.md`. |
-| 8 | Dashboard | TODO | |
+| 8 | Dashboard | DONE | S3 dump gate 10/10 exact (6,053,122 rows, 17 weeks); Option A health publish is byte-idempotent; Map/Season/Predictions/Pipeline Health pages verified with `AppTest`; `delta-crops-dashboard` one command; corruption rejected; 234 tests pass. |
 | 9 | Packaging and documentation | TODO | |
 
 Phases 2–5 figures above describe the original 2019–2023 build. Season 2024 (2026-11-12) adds 351
@@ -476,3 +477,62 @@ it is new locations with known history, not cold start; block bootstrap weights 
 equally (253–34,075 rows each); 2023 lag missingness reaches 73.414 % (`ndvi_roll3`) when it is the
 held-out season; harvest and irrigation are unobserved confounders. No Phase 8 dashboard work was
 started.
+
+## Phase 8 completion — 2026-11-13 (dashboard)
+
+**Order of work.** 1) docs-only freeze of the prediction dump (`99389b2`), then its load-path
+revision before any code (`f083130`); 2) `models/predictions.py` + 13 tests (`7282576`), then the
+detached refit; 3) Option A health publisher; 4) read-only loaders and four pages; 5) verification;
+6) these docs.
+
+**Prediction dump.** `artifacts/phase8/predictions/temporal_2024.parquet` — 6,053,122 rows
+(3,026,561 per variant), 29.6 MB, 17 weeks (2024-05-13 → 2024-09-02), 225,582 cells, 0 duplicate
+`(variant, cell_id, week_start)`, `prob ∈ [6.1e-6, 0.9999]`, 0 NaN. Refit 561.2 s, 8,912 MB peak.
+Gate: 10/10 checks with **delta exactly 0.0** (`full` PR-AUC 0.8213704513 / P@R.5 0.8713148213 /
+Brier 0.0936884443; `ndvi_only` 0.8235560892 / 0.8740271972 / 0.0924262925; rows 2,449,220 and
+positives 614,324 for both). Re-scoring the written file reproduces the same metrics.
+
+**Why the load path changed (freeze Revision 1).** The builder writes the audit Parquet
+`ORDER BY year, cell_id, week_start`; Phase 7 trained on DuckDB's natural join order from
+`build_sql`. XGBoost `hist` builds its quantile sketch from row order, so refitting the sorted file
+would have measured a different model. The dump therefore uses `load_frames` + `build_sql` +
+`fold_frames`. Guard 2 checks `test.year == {2024}` because `load_frames` does not select the
+builder's `test_year` column — the same invariant, not a weaker one.
+
+**Pipeline Health (Option A).** `python -m delta_crops.dashboard.health` published
+`data/gold/_reports/pipeline_health.json` from `quality_20261112T020141Z_47c4a558.json` (`passed`,
+16 checks, 352 dates, 6 seasons) and `weekly_gate_20261112T020232Z_65b82678.json` (`passed`). Two
+consecutive runs produced identical bytes; no wall clock is written; the quality and gate code was
+not modified. A missing quality report raises instead of publishing an empty health file, and a
+missing gate is recorded as `null` rather than invented.
+
+**Dashboard.** `src/delta_crops/dashboard/`: `app.py` (sidebar radio over four pages), `cli.py` +
+`__main__.py` (`delta-crops-dashboard`, `python -m delta_crops.dashboard`), `common.py` (pydeck
+deck, colour ramps), `data.py` (cached read-only loaders), `health.py` (publisher), and `views/`.
+Paths come from `DELTA_CROPS_DATA`, `DELTA_CROPS_PREDICTIONS`, `DELTA_CROPS_ARTIFACTS`.
+`pyproject.toml` gained the `dashboard` extra (streamlit, plotly) and the console script.
+
+**Pages, measured.** Map: 2,483 blocks (2,459 cropland) for 2024-07-01, 20 slider weeks
+(2024-05-06 → 2024-09-16); Season: cropland NDVI vs Tmax plus heatwave/rainfall bars, 6 seasons;
+Predictions: 17 slider weeks (2024-05-13 → 2024-09-02), 2,309 of 2,459 cropland blocks on
+2024-07-01, S3 scoreboard with both variants failing PR-AUC only, 10-bin calibration; Pipeline
+Health: 16 checks, 6 season-gap rows, gate table, S5 gap warning.
+
+**17 vs 20 weeks (stated on the page).** `2024-05-06` has no anomaly (0 of 239,304 cells: no
+baseline years for that ISO week); `2024-09-09` and `2024-09-16` have no `t+2` inside the season.
+Gold keeps 20 weeks; the model honestly scores 17. No padding.
+
+**Verification.** Full suite `.venv/bin/python -m pytest -q` → **234 passed, 1 deselected in
+34.14 s**. New files: `tests/test_dashboard_health.py` (5), `tests/test_dashboard_data.py` (19),
+`tests/test_dashboard_app.py` (6). `AppTest` drives all four pages, asserts the 20- and 17-week
+sliders, the 17-vs-20 note, the S5 gap, and that the lake/artifacts mtimes are unchanged.
+`delta-crops-dashboard --server.port 8599` + `curl /` → **200**, `/_stcore/health` → `ok`; the
+server was stopped afterwards. Deliberate corruption on a temp copy of the real dump (`prob = 2.0`)
+→ `probabilities outside [0, 1]: [2.0]`; a copy of the health summary with `schema_version = 2` →
+`unexpected pipeline_health.json schema_version`. Neither touched the real lake.
+
+**Limitations.** The dump is gitignored, so a fresh clone must rerun
+`python -m delta_crops.models.predictions` (561.2 s, 8,912 MB) before the Predictions page works.
+Block polygons are centroid envelopes (± half a 100 m cell), not true footprints. No auth, no
+Docker, local demo only. The dashboard adds no new evidence: S3 still fails PR-AUC, and S5
+calibration remains unmeasured. Phase 9 not started.
