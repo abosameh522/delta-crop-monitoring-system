@@ -11,6 +11,9 @@
 # Data lake (raw + derived data live only on the machine)
 data/
 
+# Phase 7+ model artifacts (metrics, matrices, model binaries)
+artifacts/
+
 # Python
 __pycache__/
 *.py[cod]
