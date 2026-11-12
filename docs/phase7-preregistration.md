@@ -46,6 +46,7 @@ column, no forward-week `n_obs`/coverage, no `zscore`.
 | `ndvi_mean`, `ndvi_std`, `masked_pct_mean`, `n_obs` (week t) | end of week t |
 | `ndvi_lag1..3`, `ndvi_roll2/3`, `ndvi_slope_2w` | ≤ t |
 | `anomaly_t`, `baseline_mean`, `n_baseline_years` | current NDVI + training seasons only |
+| `anomaly_lag1` (exported for B3 only; not in `FEATURES`) | end of week `t−1`, i.e. ≤ t |
 | temperature (`temp_max_mean_c`, `temp_max_max_c`, `temp_min_mean_c`), `solar_sum_mj_m2`, `precip_sum_mm`, `heatwave_days`, their 1–2 week lags and `heatwave_days_2w` | week t and earlier |
 | `week_index` 1–20 | calendar |
 | `cropland_pct`, `is_cropland` | static |
@@ -57,7 +58,7 @@ column, no forward-week `n_obs`/coverage, no `zscore`.
 | B0 majority | constant score; PR-AUC equals prevalence |
 | B1 persistence | score = −`anomaly_t` (current state persists) |
 | B2 seasonal prior | training-year positive rate for (ISO week, `is_cropland`); no cell identity |
-| B3 logistic regression | `anomaly_t`, one lagged anomaly (`anomaly_t−1`), week-of-season; fitted on training seasons only |
+| B3 logistic regression | `anomaly_t`, one lagged anomaly (`anomaly_t−1`), week-of-season; with an intercept; fitted on training seasons only |
 | M XGBoost | `hist`, `binary:logistic`, depth 6, learning rate 0.05, at most 600 rounds |
 
 **Brier for B1 is n/a.** B1 is a ranking score, not a probability; it is compared
@@ -70,6 +71,36 @@ by PR-AUC and precision at recall 0.50 only. B0, B2, B3 and M report Brier.
 3. lower Brier score than that best baseline.
 
 If any part fails, the report says the model **does not beat the baseline**.
+
+### 5.1 Decision population (added 2026-11-12, before any model result)
+
+* The verdict is decided on **`is_cropland = true`, stratum `pooled`**, on the
+  **temporal holdout** (train 2019–2023, test 2024). Strata `complete` and
+  `incomplete` are reported but are **not** decision populations.
+* **"The best baseline" on a fold** is the baseline with the highest
+  `cropland/pooled` PR-AUC on that fold (B0, B1, B2 or B3).
+* The leave-one-season-out result is reported alongside as the **mean and the
+  range over the six folds**, and the verdict must also say whether M beats the
+  best baseline on PR-AUC in **at least four of the six folds**. That fold count
+  is a reporting condition, not a replacement for the temporal decision.
+* For the Brier condition, M is compared against **that same best baseline** and
+  **also** against the **best Brier among the probabilistic baselines B0, B2 and
+  B3**. Both comparisons are reported; the pre-registered condition above stays
+  exactly as written.
+
+### 5.2 Onset analysis (secondary, added 2026-11-12)
+
+Added **after the B0–B3 baseline results were seen, but before any model result**.
+
+* Subset: **`anomaly_t > −0.08`** — the current week is not already stressed.
+* Report prevalence, PR-AUC, precision at recall 0.50 and lift for B0–B3 and
+  later M on that subset, per fold, for **`cropland/pooled`** (all-cells as the
+  second column).
+* Reason: persistence dominates the pooled metric because a cell's anomaly stays
+  similar from week to week through the season. The pooled number therefore
+  mostly measures persistence, and the onset subset asks the harder question —
+  given a currently unstressed cell, which one becomes stressed next?
+* The decision rule in §5.1 is unchanged by this secondary analysis.
 
 ## 6. Splits and evaluation
 
@@ -95,6 +126,12 @@ If any part fails, the report says the model **does not beat the baseline**.
 * **Ablation:** NDVI-only features vs NDVI+weather features on identical folds.
   **No weather effect is claimed unless the ablation shows a gain on the
   held-out fold.**
+* **Controls.** The shuffled-label control (refit on permuted training labels,
+  evaluate against independently permuted test labels) only checks the metric
+  and scoring code — it is **not** evidence of no leakage. The leakage evidence
+  is the truncation test (`test_features_do_not_use_the_future`, which now also
+  compares `anomaly_lag1`), `test_recomputed_baseline_excludes_own_season` and
+  `test_test_season_never_enters_a_training_baseline`.
 
 ## 7. Metrics
 
@@ -145,15 +182,16 @@ baseline pool.
 * Feature missingness differs by split (e.g. `ndvi_lag3` missing 12.7 % in
   training vs 20.4 % in 2024) because retained early-season rows differ; XGBoost
   handles missing values natively, but the shift is reported.
-* **2024 has 145,406 rows at `week_index = 2` (4.8 % of the season); the
-  training seasons have none at `week_index = 1` and none at `week_index = 2`
-  except a few 2020–2022 rows.** ISO week 19 has zero `status='ok'` cells in
-  every season, and ISO week 20 fails the ≥3-baseline-year gate for a
-  leave-one-out training row (its 4-year pool has at most 2 usable years) while
-  the 2024 test row succeeds with its 5-year pool (2019, 2021, 2023). Because
-  `week_index = 2` has no `week_index = 0` weather week, **all** 145,406 of those
-  rows have `temp_max_mean_c_lag2` missing — this is the entire 4.8 % test
-  missingness. The strata above make this visible instead of pooling it away.
+* **2024 has 145,406 rows at `week_index = 2` (4.8 % of the season); every
+  training season has exactly zero rows at `week_index = 2`.** ISO week 19 has
+  zero `status='ok'` cells in every season, and ISO week 20 fails the
+  ≥3-baseline-year gate for a leave-one-out training row (its 4-year pool has at
+  most 2 usable years) while the 2024 test row succeeds with its 5-year pool
+  (2019, 2021, 2023). Because `week_index = 2` has no `week_index = 0` weather
+  week, **all** 145,406 of those rows have `temp_max_mean_c_lag2` missing — this
+  is the entire 4.8 % test missingness. The strata above make this visible
+  instead of pooling it away. **The model has never seen `week_index = 2` in
+  training**, so any prediction for those rows is an extrapolation.
 * Training rows use a 4-year baseline pool and test rows a 5-year pool in the
   temporal split.
 
