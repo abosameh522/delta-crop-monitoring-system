@@ -90,7 +90,9 @@ Before any fit:
 
 1. The `split` column is exactly `train` 2019–2023 and `test` 2024; no season on
    both sides.
-2. `test_year` is constant 2024 on test rows and absent from train rows.
+2. the test side is exactly season 2024 and no training row shares that season
+   (`load_frames` does not select the builder's `test_year` column, so the
+   equivalent `year` invariant is checked instead — see §6).
 3. Train years equal the S3 split's `train_years`; test years equal `{2024}`.
 4. `(cell_id, week_start)` is unique in the test frame — otherwise the gate's
    row count would be wrong and the map would double-count.
@@ -141,7 +143,11 @@ and uses the identical path Phase 7 used:
   `delta_crops.models.train` — the same function, same SQL, same DuckDB version;
 * **split:** `fold_frames()`, the same guard Phase 7 used;
 * **CLI:** `--data-dir` / `--config` / `--temp-dir` replace `--dataset`; the
-  Parquet remains the audit copy, not the training input.
+  Parquet remains the audit copy, not the training input;
+* **guard 2 (clarified, not weakened):** `load_frames` selects
+  `METADATA_COLUMNS`, which has no `test_year`, so the guard asserts
+  `test.year == {2024}` and that no train row shares it — the same invariant the
+  `test_year` column encodes.
 
 Everything else in this freeze is unchanged: split, variants, frozen rounds,
 dumped columns, tolerance and counts.

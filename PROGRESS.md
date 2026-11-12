@@ -105,9 +105,10 @@
   `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 is closed
   (2026-11-13); Phase 8 is in progress.** S5 has no reliability table because predictions were not
   persisted — a documented gap, not a pending task.
-- **Next:** the prediction-dump freeze is committed; next is
-  `src/delta_crops/models/predictions.py` plus tests, then the detached refit whose reproduction
-  gate must match S3 to 1e-9. Dashboard code starts only after the dump passes.
+- **Next:** the prediction dump is **done and verified** —
+  `artifacts/phase8/predictions/temporal_2024.parquet` (6,053,122 rows, 29.6 MB) reproduces the S3
+  metrics with **zero delta** on all ten gate checks. Dashboard code starts only on the user's
+  `next`.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
