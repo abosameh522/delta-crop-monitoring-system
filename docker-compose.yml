@@ -16,10 +16,17 @@ x-image: &image
     UID: "${HOST_UID:-1000}"
     GID: "${HOST_GID:-1000}"
 
+x-dashboard: &dashboard
+  context: .
+  target: dashboard
+  args:
+    UID: "${HOST_UID:-1000}"
+    GID: "${HOST_GID:-1000}"
+
 services:
   server:
     build: *image
-    image: delta-crops:6b
+    image: delta-crops:local
     init: true
     restart: unless-stopped
     stop_grace_period: 30s
@@ -50,7 +57,7 @@ services:
 
   orchestrator:
     build: *image
-    image: delta-crops:6b
+    image: delta-crops:local
     init: true
     restart: unless-stopped
     stop_grace_period: 30s
@@ -84,6 +91,52 @@ services:
       retries: 3
       start_period: 60s
 
+  # One-shot: project the newest quality and Gold-gate reports into
+  # data/gold/_reports/pipeline_health.json. Writes exactly one file.
+  #   docker compose --profile dashboard up -d
+  health-publish:
+    profiles: ["dashboard"]
+    build: *dashboard
+    image: delta-crops:dashboard
+    init: true
+    restart: "no"
+    environment:
+      DELTA_CROPS_DATA_DIR: /app/data
+    volumes:
+      # Read-write on purpose: this is the only dashboard-side writer, and it
+      # touches only data/gold/_reports/pipeline_health.json.
+      - ./data:/app/data
+    command: ["python", "-m", "delta_crops.dashboard.health"]
+
+  # The Streamlit app. Reads Gold, the published health summary and artifacts;
+  # both bind mounts are read-only. The guard in dashboard/data.py refuses any
+  # non-SELECT query, and the image carries no pipeline credentials.
+  dashboard:
+    profiles: ["dashboard"]
+    build: *dashboard
+    image: delta-crops:dashboard
+    init: true
+    restart: unless-stopped
+    depends_on:
+      health-publish:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      DELTA_CROPS_DATA: /app/data
+      DELTA_CROPS_PREDICTIONS: /app/artifacts/phase8/predictions/temporal_2024.parquet
+      DELTA_CROPS_ARTIFACTS: /app/artifacts/phase7
+    volumes:
+      - ./data:/app/data:ro
+      - ./artifacts:/app/artifacts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # Container-side test run. `tests/` is deliberately not in the image, so it is
   # mounted read-only; pytest comes from the `test` build stage.
   #   docker compose --profile test run --rm tests
@@ -95,7 +148,7 @@ services:
       args:
         UID: "${HOST_UID:-1000}"
         GID: "${HOST_GID:-1000}"
-    image: delta-crops:6b-test
+    image: delta-crops:test
     init: true
     restart: "no"
     environment:

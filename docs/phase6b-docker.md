@@ -230,7 +230,7 @@ records.
 - **Rebuild the test image after any `src/` change.**
   `HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`
   before `docker compose --profile test run --rm tests`. The image copies the
-  source at build time; running a stale `delta-crops:6b-test` executes old code.
+  source at build time; running a stale `delta-crops:test` executes old code.
   This happened once: the test image was 4 hours old when first run, so it
   executed pre-fix code and reported 9 failures (5 missing repo files, 4 from
   old code). After a rebuild only the 5 repo-file tests failed, which led to the

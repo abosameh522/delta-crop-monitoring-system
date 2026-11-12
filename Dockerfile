@@ -52,6 +52,20 @@ USER app
 # python directly. The compose service supplies the default command.
 CMD ["python", "-m", "delta_crops.orchestration.serve"]
 
+# ---------------------------------------------------------- dashboard ----
+# Separate stage: the shipped pipeline image must not carry streamlit/plotly.
+# `docker compose --profile dashboard build` builds this target.
+FROM runtime AS dashboard
+
+USER root
+RUN uv sync --frozen --no-dev --extra dashboard \
+ && chown -R app:app /app
+
+USER app
+
+# Bind all interfaces inside the container; compose publishes it on 127.0.0.1.
+CMD ["delta-crops-dashboard", "--server.address", "0.0.0.0", "--server.port", "8501"]
+
 # ---------------------------------------------------------------- test ----
 # `docker compose --profile test run --rm tests` or `docker build --target test`.
 # Dev dependencies live only in this stage: the shipped image cannot import pytest.

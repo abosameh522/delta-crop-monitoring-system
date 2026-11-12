@@ -66,7 +66,7 @@
   effects, not schedule failures; the scheduled deployment was healthy (3 future SCHEDULED runs,
   one manual `no_op` COMPLETED). The real ledger stayed at 1727 lines, git stayed clean, and
   `data/_logs/pipeline_runs.jsonl` held only the two `no_op` records.
-- **Test-image rule:** rebuild `delta-crops:6b-test` after ANY `src/` change
+- **Test-image rule:** rebuild `delta-crops:test` after ANY `src/` change
   (`HOST_UID=1000 HOST_GID=1000 docker compose --profile test build tests`). A 4-hour-old image
   executed pre-fix code and reported 9 failures (5 missing repo files, 4 from old code); after the
   rebuild only the 5 repo-file tests failed, which produced the host-only skip policy (`dc171f9`).
@@ -475,8 +475,8 @@ coverage lives in `tests/test_models.py`, `tests/test_baselines.py`, `tests/test
 (2024, the most extreme season); S5 held-out blocks still use their own 2019–2023 climatology, so
 it is new locations with known history, not cold start; block bootstrap weights 27 unequal blocks
 equally (253–34,075 rows each); 2023 lag missingness reaches 73.414 % (`ndvi_roll3`) when it is the
-held-out season; harvest and irrigation are unobserved confounders. No Phase 8 dashboard work was
-started.
+held-out season; harvest and irrigation are unobserved confounders. Phase 8 dashboard work was
+not part of Phase 7.
 
 ## Phase 8 completion — 2026-11-13 (dashboard)
 
