@@ -16,7 +16,7 @@ crs: EPSG:4326
 #: form the historical baseline for anomaly calculations.
 seasons:
   focus: 2023
-  years: [2019, 2020, 2021, 2022, 2023]
+  years: [2019, 2020, 2021, 2022, 2023, 2024]
   window:
     start: "05-01"
     end: "09-30"
