@@ -21,7 +21,7 @@ new result.
 | Split | **S3 temporal** (train 2019–2023, test 2024) |
 | Variants | **`full`** (26 features) and **`ndvi_only`** (16 features) |
 | Rows | every **2024 test row** of the built dataset — 3,026,561 rows, all cells, no filtering |
-| Fit data | the 2019–2023 rows of `artifacts/phase7/dataset/temporal.parquet`, read as built — no rebuild, no re-derivation of labels |
+| Fit data | the 2019–2023 rows produced by the Phase 7 loader (`load_frames` → `build_sql`), i.e. the identical frame Phase 7 trained on — see Revision 1 in §6 |
 | Rounds | **read from `artifacts/phase7/xgb_temporal.json`**: `variants.full.rounds.best_round` = **533**, `variants.ndvi_only.rounds.best_round` = **275** |
 | Hyperparameters | `delta_crops.models.train.PARAMS` unchanged: `binary:logistic`, `hist`, `max_depth=6`, `eta=0.05`, `seed=20260701`, `nthread=os.cpu_count()`, `eval_metric=aucpr` |
 | Early stopping | **not run.** The frozen best round is used directly, so the dump cannot select a different model |
@@ -106,19 +106,49 @@ Any failure raises and exits non-zero before a booster is created.
 ## 5. Commands
 
 ```bash
-# the dump and its gate
+# the dump and its gate (Revision 1: same loader as Phase 7)
 python -m delta_crops.models.predictions
 
 # equivalent explicit form
 python -m delta_crops.models.predictions \
-  --dataset artifacts/phase7/dataset/temporal.parquet \
+  --data-dir data \
   --metrics artifacts/phase7/xgb_temporal.json \
   --out artifacts/phase8/predictions/temporal_2024.parquet
 ```
 
 ---
 
-## 6. Scope limits
+## 6. Revision 1 — load path (2026-11-13, before any code)
+
+The original §1/§5 said "read `artifacts/phase7/dataset/temporal.parquet`, no
+rebuild". That cannot reproduce the artifact exactly, and the reason is
+mechanical:
+
+* the builder writes its Parquet with
+  `ORDER BY year, cell_id, week_start` (`dataset.py:361`), so the file is sorted;
+* Phase 7 trained on `load_frames()` → `SELECT ... FROM (build_sql(...))`, which
+  returns DuckDB's natural hash-join order, i.e. the same rows in a **different
+  order**;
+* XGBoost's `hist` builds its quantile sketch and histograms from row order, so
+  a different ordering can move split thresholds and change the score in the
+  last digits — exactly the regime the 1e-9 gate is meant to detect.
+
+Reading the sorted Parquet would therefore test "a model fit on the same rows in
+a different order", not the Phase 7 model. Revision 1 keeps the gate's meaning
+and uses the identical path Phase 7 used:
+
+* **data:** `load_frames(root, config, temporal_split(years), temp_dir)` from
+  `delta_crops.models.train` — the same function, same SQL, same DuckDB version;
+* **split:** `fold_frames()`, the same guard Phase 7 used;
+* **CLI:** `--data-dir` / `--config` / `--temp-dir` replace `--dataset`; the
+  Parquet remains the audit copy, not the training input.
+
+Everything else in this freeze is unchanged: split, variants, frozen rounds,
+dumped columns, tolerance and counts.
+
+---
+
+## 7. Scope limits
 
 - No dashboard code reads or writes anything outside `data/gold/**`,
   `artifacts/phase8/predictions/` and `artifacts/phase7/*.json`.
