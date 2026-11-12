@@ -199,7 +199,8 @@ def test_features_do_not_use_the_future(tmp_path: Path) -> None:
 
     full_row = _row(full, 1, cutoff)
     trunc_row = _row(truncated, 1, cutoff)
-    for column in FEATURES:
+    # anomaly_lag1 is exported for B3 but is not in FEATURES, so compare it too.
+    for column in (*FEATURES, "anomaly_lag1"):
         assert _same(full_row[column], trunc_row[column]), column
 
     # And the same for a training row, where only the own season is truncated.
@@ -208,7 +209,7 @@ def test_features_do_not_use_the_future(tmp_path: Path) -> None:
     cut_train = _frame(tmp_path, split, truncate=(2021, train_cutoff), require_target=False)
     left = _row(full_train, 1, train_cutoff)
     right = _row(cut_train, 1, train_cutoff)
-    for column in FEATURES:
+    for column in (*FEATURES, "anomaly_lag1"):
         assert _same(left[column], right[column]), column
 
 
