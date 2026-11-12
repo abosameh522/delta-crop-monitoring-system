@@ -152,10 +152,81 @@ effect.
 **(f) Feature importance** may be printed for information (gain, top 15) but is
 **not** interpreted causally.
 
+### 5.4 S4 LOSO execution freeze (2026-11-12, before any LOSO model was fitted)
+
+Written **before any leave-one-season-out model was fitted or scored**. No LOSO
+result has been seen at the time of this commit.
+
+**(a) Held-out unit.** One **season**. Six folds `loso-2019` … `loso-2024`: the
+test rows are that season, the training rows are the other five. **All cells are
+shared between train and test.** No cell is held out spatially and every
+neighbour of a test cell is in training. Static features (`cropland_pct`,
+`is_cropland`) and every per-cell baseline come from the training seasons.
+LOSO therefore measures **temporal generalisation to an unseen season for known
+locations**, not spatial generalisation; spatial leakage is **not** removed by
+this design. The 5 km-block and spatial-holdout sensitivity runs in §6 remain
+separate and are **not** part of S4. The verdict must not be read as evidence of
+skill on new locations.
+
+**(b) Early stopping and refit.** Within each fold the validation season is the
+**most recent remaining training season** (for `loso-2024` that is 2023). Fit on
+the other training seasons, take the best iteration, refit on all five training
+seasons and score the held-out season **once** per variant. `loso-2024` has the
+same fit/validation/refit seasons as the S3 temporal split, so its numbers are a
+pipeline-consistency check and must reproduce S3 (differences only from the
+documented deterministic path are a bug).
+
+**(c) Frozen hyperparameters.** Identical to §5.3: `hist`, `binary:logistic`,
+`max_depth = 6`, `eta = 0.05`, `num_boost_round ≤ 600`, `seed = 20260701`,
+early-stopping patience 50 on `aucpr`. Nothing is tuned on any held-out season.
+
+**(d) Verdict bar — stated explicitly, not inherited silently.** The S3 bar was
+derived for the single 2024 temporal test, so it cannot be reused as-is for an
+average over six folds. The target, metrics, population and the minimum
+meaningful margin are unchanged, so the same margins are applied to the **mean
+over the six folds** on `cropland/pooled`:
+
+* mean B3 PR-AUC **0.770509** (std 0.035820, min 0.719293, max 0.824558) →
+  M-full must reach mean PR-AUC **≥ 0.820509** (B3 + 0.05, the same margin as
+  S3);
+* mean B3 precision at recall 0.50 **0.818771** (std 0.042513) → M-full must
+  reach a **strictly greater** mean P@R.5;
+* mean B3 Brier **0.094783** (std 0.007035) → M-full must reach a **strictly
+  lower** mean Brier.
+
+All three conditions must hold. Per-fold values are reported descriptively and
+**cannot change the verdict**; no per-fold minimum is required. The margin is
+kept at 0.05 because the metric, population and target are the same and
+changing it after S3 would be post-hoc.
+
+**(e) Feature variants.** The exact column lists are those frozen in §5.3:
+`full` = 26 columns, `ndvi_only` = 16 columns (the 26 minus the 10 weather
+columns). Both variants run on all six folds. A weather effect is claimed only
+if `full` beats `ndvi_only` on mean `cropland/pooled` PR-AUC, with the §5.3
+single-grid-point caveat.
+
+**(f) Sanity controls under LOSO, per fold.** (i) XGBoost on the three B3
+features (`anomaly_t`, `anomaly_lag1`, `week_index`) must land within **0.02** of
+that fold's stored B3 PR-AUC; its floor is `B3_fold − 0.02`. (ii) Training labels
+permuted within each season and test labels permuted independently: PR-AUC must
+be within **0.01** of the permuted test prevalence. Any fold failing a control
+is a pipeline bug: stop and report. Per-fold and pooled numbers are shown.
+
+**(g) Onset headline.** `cropland/onset` and `all/onset` (`anomaly_t > −0.08`)
+are reported **separately** from the pooled table, per fold and on average,
+M-full vs B3. They do not enter the verdict.
+
+**(h) Label-window audit.** `anomaly_t` is the **current-week** anomaly; the
+label is the mean anomaly of **t+1 and t+2** only. Because `anomaly_t` dominates
+gain importance, a test must prove the label is not computed from the current
+week. Feature importance stays informational and is not interpreted causally.
+
 ## 6. Splits and evaluation
 
 * **Temporal holdout:** train 2019–2023, test 2024.
 * **Leave-one-season-out:** six folds over 2019–2024, train on the other five.
+  The held-out unit is a **season**, never a region: all cells appear in both
+  sides of every LOSO fold, so LOSO is a temporal check, not a spatial one.
 * XGBoost early stopping uses the **most recent remaining training season** as
   validation; the chosen number of rounds is then used to **refit on all
   training seasons** (including that validation season). The test season is
