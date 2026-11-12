@@ -3,7 +3,26 @@
 ## Status
 
 - **Phase:** 6 — orchestration **CLOSED** (6a accepted earlier, 6b verified on the host on
-  2026-11-11). Phase 7 not started.
+  2026-11-11). **Season 2024 added and built on 2026-11-12** (see the 2024 bullet below).
+  Phase 7 not started.
+- **Season 2024 (2026-11-12, run by Ahmed by hand, no flow, no Docker):** config years are now
+  `[2019, 2020, 2021, 2022, 2023, 2024]` with `focus: 2023` (commit `701d7b7`). Ingest
+  `305 downloaded, 46 skipped, 0 failed` in 4451.5 s; `verify --year 2024` 351/351 assets from
+  117 scenes; Bronze 4.9 GB (36RTV 1.2 + 36RUV 3.7); ledger 2079 lines (1727 + 351 + 1
+  `weather:2024`). Weather `silver/weather.parquet` 918 rows (153 × 6). Silver 2024
+  `59 built, 0 failed in 83.8s`; **352 ledger dates** (293 + 59), 352 sidecars; 2019–2023 Silver
+  files hash-identical. Quality **PASSED: 352 ledger dates, 84,235,008 rows; 4 alert checks** (the
+  content of the 4 alerts was not inspected). Weekly gate PASSED, 2024 NULL share 14.78 % /
+  14.93 % cropland. Orbits refreshed; orbit check on 2024 weekly = 0 rows. Gold weather/weekly/
+  anomaly each `1 built, 5 rebuilt, 0 failed`; 4,786,080 rows per year for six years; **18** Gold
+  sidecars. 2019–2023 `weekly_ndvi`/`weekly_weather` compared against `data/_regression/gold_before`
+  with `EXCEPT` both ways: 0 differences for all ten table-years. **`ndvi_anomaly` 2019–2023 is
+  expected to differ** (leave-one-out pool is now six years, not five) and was not compared.
+  `gold_regression.py` was not re-run. Record: `docs/adding-season-2024.md`.
+- **Test fix for the new year list:** `tests/test_config.py` now asserts the real contract
+  (baseline starts at 2019, is contiguous and unique, `focus in years`) instead of pinning
+  `[2019..2023]` (commit `85746e3`). Counts are unchanged: host full suite `150 passed,
+  1 deselected`; quick loop `139 passed, 12 deselected`. No assertion was weakened.
 - **6b measured on the host (Ahmed, rebuilt images with `HOST_UID=1000 HOST_GID=1000`):**
   container suite `133 passed, 6 skipped, 12 deselected` (139 total) with the 6 skips being the
   host-only Docker-file tests and their explicit reason;
@@ -57,9 +76,10 @@
   A SHA-256 over the sorted list of non-sidecar files was identical before and after for
   `data/silver` and `data/gold`; ledger still 1727 lines; git clean. The 23.3 s is warm-cache;
   there is no cold-disk timing. Procedure and scope: `docs/adopting-an-existing-lake.md`.
-- **Open after Phase 6:** real Silver/Gold are adopted, but the **scheduled flow has still never
-  run end-to-end on real data** — the schedule stays a `no_op` until a new year (e.g. 2027) is
-  added to the config; container concurrency unproven; healthcheck is not a heartbeat; `uv` image
+- **Open after Phase 6:** real Silver/Gold are adopted and 2024 is built, but the **scheduled flow
+  has still never run end-to-end on real data** — the schedule would now pick 2025 once it is
+  added to the config (2024 is complete: all 153 weather days present and the season end has
+  passed); container concurrency unproven; healthcheck is not a heartbeat; `uv` image
   tag minor-pinned (`ghcr.io/astral-sh/uv:0.9`). Known CLI quirks (not blockers, not fixed):
   `gold.cli weather` ignores `--year` and **builds** a missing year instead of adopting it;
   `--summary-json` is written only by `gold.cli build`; Gold exits 0 when `failed > 0`;
@@ -76,12 +96,12 @@
   the status section above: host full suite `150 passed, 1 deselected`; quick loop `139 passed,
   12 deselected`.
 - **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
-  adopted (2026-11-11), but the scheduled flow has never run end-to-end on real data. Phase 7+
-  not started. Legacy Silver outputs were adopted on 2026-11-11.
-- **Next:** Season-2024 plan is accepted with changes and its pre-flight is done
-  (`docs/adding-season-2024.md`); the config edit, the ingest (Ahmed, tmux) and everything after it
-  next is `go 2024 config`. Phase 7 starts only on approval for Phase 7. No unverified claim
-  is recorded as fact.
+  adopted (2026-11-11) and season 2024 is built through Gold (2026-11-12), but the scheduled flow
+  has never run end-to-end on real data. `gold_regression.py` was not re-run after 2024 and the
+  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. Phase 7+ not started.
+- **Next:** nothing is pending inside the 2024 work — ingest, Silver, quality, gate,
+  orbits and Gold are done and committed. Phase 7 starts only on approval for Phase 7. No
+  unverified claim is recorded as fact.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -97,6 +117,10 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 7 | Modeling | TODO | Baseline computed from training years only |
 | 8 | Dashboard | TODO | |
 | 9 | Packaging and documentation | TODO | |
+
+Phases 2–5 figures above describe the original 2019–2023 build. Season 2024 (2026-11-12) adds 351
+Bronze assets and 59 Silver dates: 352 ledger dates and 84,235,008 quality rows in total. Per-year
+measured detail is in the status section and `docs/adding-season-2024.md`.
 
 ## Phase 0 — Scope and setup
 

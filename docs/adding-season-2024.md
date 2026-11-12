@@ -1,137 +1,90 @@
-# Adding season 2024 — plan (accepted with changes)
+# Season 2024 — record
 
-Status: **pre-flight done (2026-11-11); config, ingest and the rest not started.**
-The config edit, the ingest (Ahmed, tmux) and every downstream step follow
-`go 2024 config`.
+Status: **DONE on 2026-11-12.** Ingest, weather, Silver, quality, gate, orbit
+cache and Gold were run by hand (no flow, no Docker). The container stack stayed
+down throughout. `config/aoi.yaml` now lists six seasons, 2019–2024, and is
+committed.
 
-## Pre-flight result (read-only, 2026-11-11)
+Pre-flight (2026-11-11): backups in `~/backups/pre2024` (540 MB, verified with
+an empty `diff -rq` against the original `/tmp` copy), payload hash
+`~/backups/pre2024/payload_2019_2023.sha256` with **2031** lines (1722 Bronze +
+293 Silver NDVI + `silver/cells.parquet` + 15 Gold), ledger 1727 lines.
 
-- Free space: `412G` of `475G` (63 G used, 14 %) — enough for the ~0.6 GB copies
-  and the 2024 download.
-- Backups in `~/backups/pre2024` (540 MB total; `gold` is 522 MB):
-  `ingestion_log.jsonl`, `ingestion_log.parquet`, `silver_weather.parquet`,
-  `orbits.parquet`, `silver_reports/`, `gold/`.
-- Ledger: 1727 lines; `sha256(ingestion_log.jsonl)` =
-  `f7d46103beec582a1c61eeeea6a94f4862a09444e1a308dc2f1a2963bfe173b4`, identical
-  for the copy.
-- `diff -rq data/gold ~/backups/pre2024/gold` → empty (exit 0).
-- Payload hash file `~/backups/pre2024/payload_2019_2023.sha256`: **2031 lines**
-  (1722 Bronze + 293 Silver NDVI + `silver/cells.parquet` + 15 Gold), 0 sidecars,
-  0 paths containing `year=2024`. The earlier "expected 309" was an arithmetic
-  mistake (it counted only Silver + Gold); 2031 is the correct total.
-- 23.3 s to hash ~26.9 GB warm.
-- `data/_regression/` was not touched.
+## Measured results
 
-## Changes to the earlier plan
+| Step | Command | Measured |
+| --- | --- | --- |
+| Ingest | `ingestion.cli ... ingest --year 2024` | `305 downloaded, 46 skipped, 0 failed` in 4451.5 s, exit 0 |
+| Ingest verify | `ingestion.cli ... verify --year 2024` | `Expected 351 assets from 117 scenes; complete 351`, exit 0 |
+| Bronze 2024 | — | 1.2 GB (tile 36RTV) + 3.7 GB (tile 36RUV) = **4.9 GB**; in line with the ~5 GB estimate |
+| Ledger | — | **2079** lines = 1727 + 351 assets + 1 `weather:2024`; the first 1773 lines byte-identical before/after the resume; no file outside `year=2024` touched |
+| Silver weather | `transform.cli ... weather` | `silver/weather.parquet` **918 rows** = 153 × 6 |
+| Silver 2024 | `transform.cli ... year --year 2024` | `59 built, 0 skipped, 0 rebuilt (input change), 0 unfingerprinted, 0 adopted, 0 failed in 83.8s (peak RSS 1090 MB)` |
+| Silver status | `transform.cli ... status --year 2024` | `352/352` files (352 ledger dates = 293 + 59); 352 sidecars; 2019–2023 files hash-identical; no `.tmp` |
+| Quality | `quality.cli ...` | `PASSED: 352 ledger dates, 84,235,008 rows; 4 alert checks`, `failed_checks` empty, 21.5 s, `quality_20261112T020141Z_47c4a558.json` |
+| Weekly gate | `gold.cli ... gate` | PASSED, `weekly_gate_20261112T020232Z_65b82678.json`; 2024 NULL share 14.78 % (all cells) / 14.93 % (cropland); 1,659,210 NULL cell-dates, mean masked 97.46 % on NULL |
+| Orbits | `gold.cli ... orbits --refresh` | exit 0; old cache backed up to `/tmp/orbits_before_2024.parquet` |
+| Orbit check | weekly 2024, `n_obs > 0 AND (orbit_mix IS NULL OR n_orbits = 0)` | **0 rows** |
+| Gold weather | `gold.cli ... weather` | 1 built, 5 rebuilt (input change), 0 failed |
+| Gold weekly | `gold.cli ... weekly` | 1 built, 5 rebuilt (input change), 0 failed |
+| Gold anomaly | `gold.cli ... anomaly` | 1 built, 5 rebuilt (input change), 0 failed |
+| Row counts | — | `weekly_ndvi` and `ndvi_anomaly` **4,786,080 rows per year** for all six years; Gold sidecars **18** |
 
-1. **Rollback never deletes before a verified copy exists.** Restore Gold and
-   Silver reports into a side directory, verify content, then swap.
-2. **`ingestion_log.parquet` goes stale after the 2024 append and is not
-   compacted.** Nothing in Silver/Quality/Gold reads it: `compact_log` is the
-   only writer (`src/delta_crops/ingestion/bronze.py:360-370`, called from
-   `ingestion/cli.py:153`) and only `tests/test_ingestion.py:192` reads it.
-   Silver reads the JSONL (`transform/bronze_reader.py:51-57`), Quality calls
-   `load_ledger` (`quality/checks.py:94`), Gold's gate calls it
-   (`gold/gate.py:34`), ingestion `status`/`verify` read the JSONL
-   (`ingestion/cli.py:163-174, 189`). Stale Parquet is therefore inert; do not
-   run `compact` during this step.
-3. **Explicit post-weekly orbit check for 2024**, because `weekly_fingerprint`
-   has no orbit hash (`gold/fingerprint.py:133-141`) and a late
-   `orbits --refresh` would not trigger a rebuild.
-4. **One more stop criterion:** if `weekly_ndvi` or `weekly_weather` for
-   2019–2023 differs at all from `data/_regression/gold_before` after the
-   rebuild, stop and do not run anomaly. The stop criteria are otherwise exactly
-   as agreed.
+Regression against `data/_regression/gold_before` (never written): `weekly_ndvi`
+and `weekly_weather` for 2019–2023 compared with DuckDB `EXCEPT` in both
+directions → **0 differences for all ten table-years**.
 
-## Commands
+### What changed and what did not
 
-### 1. Config
+The new `silver/weather.parquet` changes the weather SHA-256 and the config hash,
+so all five older `weekly_weather` and `weekly_ndvi` files were **rewritten**,
+with identical row values (measured above). `ndvi_anomaly` for 2019–2023 was
+**not** compared and is **expected to differ** from the old snapshot: the
+leave-one-year-out baseline pool now has six years instead of five. No claim is
+made that the anomaly is unchanged.
 
-`config/aoi.yaml:19` → `years: [2019, 2020, 2021, 2022, 2023, 2024]`. `focus`
-stays 2023 unless the dashboard default should move to 2024.
+## Incident log (lessons for next time)
 
-### 2. Ingest (Ahmed, tmux)
+1. The first attempt used the system `python` and failed with
+   `ModuleNotFoundError: delta_crops`. Always call `.venv/bin/python`; no venv is
+   active in the shell.
+2. The second attempt was interrupted with Ctrl-C after 46 assets (exit 130).
+   There were no `.tmp` files left and the ledger was valid JSON; the resumed run
+   reported `305 downloaded, 46 skipped, 0 failed`. The design worked as
+   intended: each asset is written to `.tmp` then `os.replace`d, and the ledger
+   record is appended only after the final file exists.
+3. Pasting several lines after `tmux new` or `newgrp` loses lines — send the
+   command block one line at a time or use a script file.
+4. Piping to `tee` makes Python buffer stdout, so a log can stay empty if the
+   process is killed. Use `python -u` (or `PYTHONUNBUFFERED=1`) when logging a
+   long download.
 
-```bash
-python -m delta_crops.ingestion.cli --config config/aoi.yaml --data-dir data ingest --year 2024
-python -m delta_crops.ingestion.cli --config config/aoi.yaml --data-dir data verify --year 2024
-```
+## Not done / not claimed
 
-Year filter: `ingestion/cli.py:40-41` → `seasons.bounds(2024)` =
-2024-05-01..2024-09-30; STAC body uses that window
-(`ingestion/earth_search.py:113-116`); files land under
-`bronze/.../year={scene.day.year}` (`ingestion/bronze.py:124-131`); weather only
-for years in the window (`ingestion/cli.py:34-35, 104-105`). Size ~5.2 GB is the
-five-year average, not a 2024 measurement.
+- The container stack stayed down and was not touched.
+- The Prefect flow has never run on real data.
+- `scripts/gold_regression.py` was not re-run after 2024 (the targeted
+  `EXCEPT` comparison above covers `weekly_ndvi`/`weekly_weather` only).
+- No Phase 7 work.
 
-### 3. Silver, quality, Gold
+## Decisions kept from the plan
 
-```bash
-python -m delta_crops.transform.cli --config config/aoi.yaml --data-dir data weather
-python -m delta_crops.transform.cli --config config/aoi.yaml --data-dir data year --year 2024
-python -m delta_crops.transform.cli --config config/aoi.yaml --data-dir data status --year 2024
-python -m delta_crops.quality.cli    --config config/aoi.yaml --data-dir data --summary-json /tmp/quality_2024.json
-python -m delta_crops.gold.cli       --config config/aoi.yaml --data-dir data gate
-python -m delta_crops.gold.cli       --config config/aoi.yaml --data-dir data orbits --refresh
-python -m delta_crops.gold.cli       --config config/aoi.yaml --data-dir data weather
-python -m delta_crops.gold.cli       --config config/aoi.yaml --data-dir data weekly
-python -m delta_crops.gold.cli       --config config/aoi.yaml --data-dir data anomaly
-```
-
-`orbits --refresh` must run **before** weekly (it rewrites the whole cache with
-all configured years).
-
-### 4. Post-weekly orbit check (expect 0)
-
-```sql
-SELECT count(*) AS violations
-FROM read_parquet('data/gold/weekly_ndvi/year=2024/weekly_ndvi.parquet')
-WHERE n_obs > 0 AND (orbit_mix IS NULL OR n_orbits = 0);
-```
-
-Any non-zero result means the orbit cache lacked 2024 dates; rerun
-`orbits --refresh`, delete the 2024 weekly output and rebuild it, because the
-fingerprint will not detect the orbit change.
-
-### 5. Stop criteria (fixed before seeing data)
-
-Any critical Quality check > 0; 2024 cropland 13-day gap share > 10 %; 2024
-masked rows > 23 % of cell-dates; fewer than 50 2024 acquisition dates or a
-missing 2024 Silver partition; weekly gate NULL share > 30 %; 2024 weather days
-≠ 153 or any null weather value; **any difference in 2019–2023
-`weekly_ndvi`/`weekly_weather` against `data/_regression/gold_before`** (then no
-anomaly).
-
-### 6. Rollback (side directory, verify, then swap)
-
-```bash
-mkdir -p /tmp/post2024
-
-# Gold: build and verify a restore copy first — never delete the live one first
-rm -rf data/gold.restore
-cp -a ~/backups/pre2024/gold data/gold.restore
-diff -rq data/gold.restore ~/backups/pre2024/gold                      # empty
-(cd data/gold.restore && find . -type f -print0 | sort -z | xargs -0 sha256sum) \
-  > /tmp/post2024/gold_restore.sha256
-# same sha256 list restricted to gold/ from the pre-flight payload file:
-grep ' gold/' ~/backups/pre2024/payload_2019_2023.sha256 | sed 's# gold/# ./#' \
-  > /tmp/post2024/gold_expected.sha256
-diff /tmp/post2024/gold_expected.sha256 /tmp/post2024/gold_restore.sha256   # empty
-mv data/gold data/gold.bad.2024
-mv data/gold.restore data/gold
-rm -rf data/gold.bad.2024
-
-# Silver reports: same rule
-rm -rf data/silver/_reports.restore
-cp -a ~/backups/pre2024/silver_reports data/silver/_reports.restore
-diff -rq data/silver/_reports.restore ~/backups/pre2024/silver_reports # empty
-mv data/silver/_reports data/silver/_reports.bad.2024
-mv data/silver/_reports.restore data/silver/_reports
-rm -rf data/silver/_reports.bad.2024
-
-# the rest of the rollback (Bronze 2024, ledger, weather, orbits, config)
-```
-
-Then re-run the payload hash and diff it against
-`~/backups/pre2024/payload_2019_2023.sha256` (empty), and confirm the ledger is back
-to 1727 lines. `data/_regression/` is never written by any of this.
+- **Rollback never deletes before a verified copy exists.** Restore into
+  `data/gold.restore`, verify against `~/backups/pre2024/gold`, then swap; same
+  pattern for `data/silver/_reports`.
+- **`ingestion_log.parquet` is stale after the 2024 append and is not
+  compacted.** Nothing in Silver/Quality/Gold reads it: `compact_log` is the only
+  writer (`src/delta_crops/ingestion/bronze.py:360-370`, called from
+  `ingestion/cli.py:153`), and only `tests/test_ingestion.py:192` reads it.
+  Silver reads the JSONL (`transform/bronze_reader.py:51-57`), Quality calls
+  `load_ledger` (`quality/checks.py:94`), Gold's gate calls it
+  (`gold/gate.py:34`).
+- **Orbit check after weekly** (above), because `weekly_fingerprint` has no orbit
+  hash (`gold/fingerprint.py:133-141`); a late `orbits --refresh` would not
+  trigger a rebuild.
+- **Stop criteria were fixed before seeing the data**: any critical quality
+  check > 0; 2024 cropland 13-day gap share > 10 %; 2024 masked rows > 23 % of
+  cell-dates; fewer than 50 2024 acquisition dates or a missing 2024 partition;
+  weekly gate > 30 %; 2024 weather days ≠ 153 or any null weather value; any
+  2019–2023 `weekly_ndvi`/`weekly_weather` difference against the snapshot
+  (then no anomaly). All passed.

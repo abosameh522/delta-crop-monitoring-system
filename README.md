@@ -3,7 +3,9 @@
 End-to-end satellite crop-monitoring pipeline for a ~50×50 km area of the central Nile Delta, Egypt:
 Sentinel-2 NDVI + Open-Meteo weather → Bronze/Silver/Gold Parquet lake → DuckDB → stress model → dashboard.
 
-**Current status:** Phase 1 complete (architecture documented, awaiting review). The full README arrives in Phase 9.
+**Current status:** Phase 6 (orchestration) is closed; the lake covers six seasons, 2019–2024
+(Bronze, Silver, quality and Gold built and verified). Phase 7 has not started, and the full README
+arrives in Phase 9.
 
 - Question, scope and decisions: [`PROJECT.md`](PROJECT.md)
 - Phase checklist: [`PROGRESS.md`](PROGRESS.md)
