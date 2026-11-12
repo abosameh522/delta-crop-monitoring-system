@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from delta_crops.models.baselines import (
+    ONSET_GROUPS,
     Group,
     _fit_b3,
     _score_b3,
@@ -16,11 +17,12 @@ from delta_crops.models.baselines import (
     brier,
     evaluate_group,
     fit_logistic,
+    group_mask,
     precision_at_recall,
     recall_at_precision,
     roc_auc,
 )
-from delta_crops.models.dataset import Split, build_sql, connect, loso_splits
+from delta_crops.models.dataset import TARGET_NDVI_ANOMALY, Split, build_sql, connect, loso_splits
 
 from test_models import CONFIG, _fixture
 
@@ -119,6 +121,25 @@ def test_b3_has_an_intercept_and_is_calibrated() -> None:
     probability = _score_b3(train, test, beta, mean, std, imputation)
     # Without the intercept this sits near 0.5 regardless of the base rate.
     assert probability.mean() == pytest.approx(test["label"].mean(), abs=0.03)
+
+
+def test_onset_mask_keeps_only_unstressed_rows() -> None:
+    frame = _synthetic_frame(2000)
+    onset = Group("all/onset", "all", "pooled", onset=True)
+    mask = group_mask(frame, onset)
+    assert 0 < mask.sum() < len(frame)
+    assert (frame.loc[mask, "anomaly_t"] > TARGET_NDVI_ANOMALY).all()
+    assert not np.array_equal(mask, group_mask(frame, Group("all/pooled", "all", "pooled")))
+    assert [group.name for group in ONSET_GROUPS] == ["all/onset", "cropland/onset"]
+
+
+def test_onset_b0_still_equals_the_subset_prevalence() -> None:
+    train = _synthetic_frame(4000)
+    test = _synthetic_frame(2000, seed=11)
+    result = evaluate_group(train, test, Group("cropland/onset", "cropland", "pooled", onset=True))
+    assert result["rows_test"] > 0
+    assert result["models"]["B0"]["pr_auc"] == pytest.approx(result["prevalence_test"], abs=1e-9)
+    assert result["models"]["B1"]["brier"] is None
 
 
 def test_split_rejects_a_test_season_in_training() -> None:

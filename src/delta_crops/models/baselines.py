@@ -24,6 +24,7 @@ import numpy as np
 
 from delta_crops.config import Config, load_config
 from delta_crops.models.dataset import (
+    TARGET_NDVI_ANOMALY,
     Split,
     build_sql,
     connect,
@@ -48,12 +49,19 @@ class Group:
     name: str
     population: str  # "all" | "cropland"
     stratum: str  # "pooled" | "complete" | "incomplete"
+    onset: bool = False  # keep only rows with anomaly_t > -0.08
 
 
 GROUPS = tuple(
     Group(f"{population}/{stratum}", population, stratum)
     for population in ("all", "cropland")
     for stratum in ("pooled", "complete", "incomplete")
+)
+
+#: Pre-registered secondary subset: the current week is not already stressed.
+ONSET_GROUPS = tuple(
+    Group(f"{population}/onset", population, "pooled", onset=True)
+    for population in ("all", "cropland")
 )
 
 
@@ -213,6 +221,8 @@ def group_mask(frame, group: Group) -> np.ndarray:
     mask = np.ones(len(frame), dtype=bool)
     if group.population == "cropland":
         mask &= frame["is_cropland"].to_numpy(dtype=bool)
+    if group.onset:
+        mask &= frame["anomaly_t"].to_numpy(dtype=np.float64) > TARGET_NDVI_ANOMALY
     missing = frame[list(LAG_COLUMNS)].isna().any(axis=1).to_numpy(dtype=bool)
     if group.stratum == "complete":
         mask &= ~missing
@@ -293,7 +303,8 @@ def frame_for_split(con, sql: str, name: str):
     return frame
 
 
-def run_split(root: Path, config: Config, split: Split, temp_dir: Path) -> dict[str, Any]:
+def run_split(root: Path, config: Config, split: Split, temp_dir: Path,
+              onset: bool = False) -> dict[str, Any]:
     """Build one fold's dataset from scratch and evaluate every baseline."""
     started = time.perf_counter()
     con = connect(config, temp_dir)
@@ -307,7 +318,8 @@ def run_split(root: Path, config: Config, split: Split, temp_dir: Path) -> dict[
         test = frame_for_split(con, sql, "test")
     finally:
         con.close()
-    groups = {group.name: evaluate_group(train, test, group) for group in GROUPS}
+    selected = ONSET_GROUPS if onset else GROUPS
+    groups = {group.name: evaluate_group(train, test, group) for group in selected}
     week_index = (
         test.groupby("week_index")["label"].agg(["size", "mean"]).reset_index()
         .rename(columns={"size": "rows", "mean": "positive_rate"}).to_dict("records")
@@ -315,6 +327,7 @@ def run_split(root: Path, config: Config, split: Split, temp_dir: Path) -> dict[
     return {
         "split": {"name": split.name, "train_years": list(split.train_years),
                   "test_year": split.test_year},
+        "onset": onset,
         "seasons": counts,
         "rows_train": int(len(train)), "rows_test": int(len(test)),
         "positive_rate_train": float(train["label"].mean()),
@@ -351,8 +364,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-dir", default=None)
-    parser.add_argument("--out", default="artifacts/phase7/baselines_metrics.json")
+    parser.add_argument("--out", default=None)
     parser.add_argument("--split", choices=("temporal", "loso", "all"), default="temporal")
+    parser.add_argument("--onset", action="store_true",
+                        help="evaluate only the pre-registered onset subset")
     parser.add_argument("--temp-dir", default="/tmp/delta_crops_phase7")
     args = parser.parse_args(argv)
 
@@ -362,14 +377,16 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     reports = []
     if args.split in ("temporal", "all"):
-        reports.append(run_split(root, config, temporal_split(config.seasons.years), temp_dir))
+        reports.append(run_split(root, config, temporal_split(config.seasons.years),
+                                 temp_dir, onset=args.onset))
     if args.split in ("loso", "all"):
         for split in loso_splits(config.seasons.years):
-            reports.append(run_split(root, config, split, temp_dir))
+            reports.append(run_split(root, config, split, temp_dir, onset=args.onset))
 
     payload = {
         "seed": SEED,
         "rule": "docs/phase7-preregistration.md",
+        "onset": args.onset,
         "reports": reports,
         "seconds": round(time.perf_counter() - started, 2),
         "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1),
@@ -377,7 +394,11 @@ def main(argv: list[str] | None = None) -> int:
     for report in reports:
         print(_compact_table(report), flush=True)
         print(flush=True)
-    path = Path(args.out)
+    out = args.out or (
+        "artifacts/phase7/baselines_onset_metrics.json" if args.onset
+        else "artifacts/phase7/baselines_metrics.json"
+    )
+    path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=float) + "\n", encoding="utf-8")
     print(json.dumps({"seconds": payload["seconds"], "peak_rss_mb": payload["peak_rss_mb"],
