@@ -6,6 +6,9 @@
   2026-11-11). **Season 2024 added and built on 2026-11-12** (see the 2024 bullet below).
   **Phase 7 — modeling CLOSED 2026-11-13**: S1–S5 run, all three campaigns fail the PR-AUC
   condition only; model card at [`docs/model-card.md`](docs/model-card.md).
+  **Phase 8 — dashboard IN PROGRESS (2026-11-13):** prediction-dump freeze at
+  [`docs/phase8-predictions-freeze.md`](docs/phase8-predictions-freeze.md); no dashboard code
+  yet.
 - **Season 2024 (2026-11-12, run by Ahmed by hand, no flow, no Docker):** config years are now
   `[2019, 2020, 2021, 2022, 2023, 2024]` with `focus: 2023` (commit `701d7b7`). Ingest
   `305 downloaded, 46 skipped, 0 failed` in 4451.5 s; `verify --year 2024` 351/351 assets from
@@ -100,11 +103,11 @@
   adopted (2026-11-11) and season 2024 is built through Gold (2026-11-12), but the scheduled flow
   has never run end-to-end on real data. `gold_regression.py` was not re-run after 2024 and the
   `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 is closed
-  (2026-11-13); Phase 8+ not started.** S5 has no reliability table because predictions were not
+  (2026-11-13); Phase 8 is in progress.** S5 has no reliability table because predictions were not
   persisted — a documented gap, not a pending task.
-- **Next:** nothing is pending inside Phase 7 — the model card, the measured results,
-  the decisions D-047…D-051 and the stale status lines are all written and committed. Phase 8
-  (dashboard) starts only on approval for Phase 8. No unverified claim is recorded as fact.
+- **Next:** the prediction-dump freeze is committed; next is
+  `src/delta_crops/models/predictions.py` plus tests, then the detached refit whose reproduction
+  gate must match S3 to 1e-9. Dashboard code starts only after the dump passes.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
