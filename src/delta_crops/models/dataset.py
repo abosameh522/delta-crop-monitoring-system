@@ -9,7 +9,9 @@ Baseline rules inside one split (D-044 recomputed for Phase 7):
 * a **training** row subtracts a leave-one-training-year-out baseline: the same
   cell and ISO week in the other training seasons;
 * a **test** row subtracts the baseline built from **all** training seasons;
-* both need at least ``min_baseline_years`` usable seasons (3 by default).
+* both need at least ``min_baseline_years`` usable seasons (3 by default), and
+  a row is kept only when the **current** week also has a baseline, so
+  ``anomaly_t`` is always defined (the same rule the stored Gold anomaly uses).
 
 No row's baseline ever contains its own season, and no test season ever enters a
 baseline. Features only use observations from the current season at or before
@@ -207,7 +209,7 @@ WITH ndvi AS (
     SELECT w.*,
            (w.fwd_a1 + w.fwd_a2) / 2.0 AS fwd_anomaly_2w
     FROM windowed w
-    WHERE w.status = 'ok'{target_filter}
+    WHERE w.status = 'ok' AND w.anomaly IS NOT NULL{target_filter}
 ), weather_lag AS (
     SELECT season, week_start,
            temp_max_mean_c, temp_max_max_c, temp_min_mean_c,
