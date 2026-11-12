@@ -221,6 +221,135 @@ label is the mean anomaly of **t+1 and t+2** only. Because `anomaly_t` dominates
 gain importance, a test must prove the label is not computed from the current
 week. Feature importance stays informational and is not interpreted causally.
 
+### 5.5 S5 execution freeze — spatial holdout on 5 km blocks (2026-11-12, before any S5 fit)
+
+Written **before any spatial-holdout model was fitted or scored**. This section
+executes the sensitivity run that §6 pre-registers and that §5.4(a) explicitly
+excluded from S4. S5 exists to answer the one question LOSO cannot: **does the
+model still work on locations it has never seen?** No S5 result has been seen
+at the time of this commit. Nothing here changes the target, the features, the
+hyperparameters, the metrics or the verdict margin defined in §5.3/§5.4.
+
+**(a) What is evaluated — the held-out unit is a 5 km block, not a season.**
+`block_5km` is already materialised by the dataset builder as
+`(cell_row // 50) * 10000 + (cell_col // 50)`, i.e. 50 × 50 cells of the 100 m
+grid ≈ 5 × 5 km. The AOI contains **110 blocks** in an 11 × 10 lattice (cell
+count per block 22–2500, mean 2175.5; all 110 contain cropland). The split is:
+
+* **Train rows:** every built row of seasons **2019–2023** whose `block_5km` is
+  in the **training block set**.
+* **Test rows:** every built row of season **2024** whose `block_5km` is in the
+  **held-out block set**.
+* A block is **never** on both sides, and a held-out block contributes **no
+  rows of any season** to fitting, early stopping or refit. That is the spatial
+  leakage this run exists to remove.
+
+**(b) Frozen block partition.** The 110 block ids are sorted ascending, permuted
+by `numpy.random.default_rng(20260702)` (S3/S4 seed + 1), and the **first 28**
+are held out; the remaining **82** train. 28/110 = 25.45 %. The partition is a
+pure function of the block id list and that seed, so it is reproducible and
+auditable; it is **not** chosen from any result, and it will not be re-drawn.
+The realised id list, counts and per-block row totals are written into the
+artifact.
+
+**(c) Frozen hyperparameters — unchanged from §5.3/§5.4.** `hist`,
+`binary:logistic`, `max_depth = 6`, `eta = 0.05`, **`num_boost_round ≤ 600`**,
+`seed = 20260701`, early-stopping patience **50** on `aucpr`.
+
+**Rounds cap: explicitly unchanged at 600.** In S4 folds 2021 and 2022 hit the
+cap (596/592 rounds for `full`, 600/595 for `ndvi_only`), so early stopping
+never fired there. That is recorded as a known property of those folds. The cap
+is **not** raised, lowered or tuned for S5, and it will **not** be changed after
+seeing any S5 result.
+
+**(d) Early stopping and refit.** Validation is the **most recent training
+season**, 2023, restricted to the **training blocks**. Fit on 2019–2022
+training-block rows, take the best iteration, refit on all of 2019–2023
+training-block rows with that number of rounds, and score the 2024 held-out
+blocks **once** per variant. No held-out block enters any fit.
+
+**(e) Baselines and the verdict bar — stated explicitly, not inherited
+silently.** S3's bar was derived on all blocks of the 2024 temporal test; S4's
+on the mean over six seasons on all blocks. Neither is the right reference for
+a *block-held-out* population, so the baseline is **re-fitted on exactly the S5
+training rows and scored on exactly the S5 held-out blocks**. B0–B3 keep their
+frozen definitions (`baselines.py`); B3 is refit on S5 train rows. The decision
+population is `cropland/pooled` **within the held-out-block 2024 rows**. The
+margin is **unchanged at 0.05 PR-AUC**, because the target, the features, the
+population definition and the metric are the same as S3/S4, and changing the
+margin after two failed campaigns would be post-hoc.
+
+The pre-registered verdict sentence, all three conditions required:
+
+> **M-full beats the baseline on unseen 5 km blocks only if, on 2024 rows of the
+> 28 held-out blocks, cropland/pooled mean PR-AUC ≥ B3(block S5) + 0.05, mean
+> precision at recall 0.50 > B3(block S5), and mean Brier < B3(block S5). If any
+> one condition fails, M-full does not beat the baseline on unseen locations.**
+
+"Mean" here is the mean over the **block bootstrap** resamples defined in (f),
+so the point estimate and its interval come from the same estimator. The point
+estimate on the full held-out set is reported alongside and must agree with the
+bootstrap mean to within Monte-Carlo error; a disagreement larger than that is
+a bug, not a result.
+
+**(f) Block-level PR-AUC and block bootstrap.** Because cells inside one 5 km
+block are strongly correlated, resampling rows would understate uncertainty.
+The uncertainty unit is the block:
+
+* **Per-block PR-AUC:** for every held-out block with at least one positive and
+  one negative `cropland/pooled` test row, PR-AUC is computed **inside that
+  block alone** and reported with its row/positive counts. Blocks failing that
+  condition are listed as not scorable; they are not dropped silently.
+* **Block bootstrap:** **1000** resamples of the **28 held-out blocks with
+  replacement**, `numpy.random.default_rng(20260703)`, rows of the drawn blocks
+  concatenated, and PR-AUC / P@R.5 / Brier recomputed for M-full, M-ndvi_only
+  and B3 on each resample. Report the percentile **95 % interval (2.5, 97.5)**
+  for every metric and for the paired difference `M − B3` (the same drawn blocks
+  score both models, so the difference is paired). Draws that contain no
+  positive or no negative rows are skipped and the number of usable draws is
+  reported.
+
+**(g) Exact column lists — identical to §5.3/§5.4.** `full` = 26 columns:
+`ndvi_mean, ndvi_std, masked_pct_mean, n_obs, ndvi_lag1, ndvi_lag2, ndvi_lag3,
+ndvi_roll2, ndvi_roll3, ndvi_slope_2w, anomaly_t, baseline_mean,
+n_baseline_years, temp_max_mean_c, temp_max_max_c, temp_min_mean_c,
+solar_sum_mj_m2, precip_sum_mm, heatwave_days, temp_max_mean_c_lag1,
+temp_max_mean_c_lag2, heatwave_days_lag1, heatwave_days_2w, week_index,
+cropland_pct, is_cropland`. The 10 weather columns are
+`temp_max_mean_c, temp_max_max_c, temp_min_mean_c, solar_sum_mj_m2,
+precip_sum_mm, heatwave_days, temp_max_mean_c_lag1, temp_max_mean_c_lag2,
+heatwave_days_lag1, heatwave_days_2w` and `ndvi_only` = the other **16**. The
+three B3 features are `anomaly_t, anomaly_lag1, week_index`. Both variants run
+on the same S5 split; a weather effect is claimed only if `full` beats
+`ndvi_only` on the S5 headline, with the §10 single-grid-point caveat.
+
+**(h) Onset headline, separate.** `cropland/onset` and `all/onset`
+(`anomaly_t > −0.08`) are reported as a **separate headline** within the
+held-out blocks, point estimate plus bootstrap interval, M-full vs B3. They do
+**not** enter the verdict.
+
+**(i) Sanity controls, on the S5 split.** (i) XGBoost on the three B3 features
+must land within **0.02** of the **S5 B3 refit** (floor `B3_S5 − 0.02`); comparing
+it to the S3 all-block B3 would be the wrong reference and is not used.
+(ii) Training labels permuted within each training season and test labels
+permuted independently: PR-AUC must be within **0.01** of the permuted test
+prevalence. Any failure is a pipeline bug: stop and report.
+
+**(j) A limitation this run cannot remove.** The per-cell climatology baseline
+for a 2024 held-out-block row is still built from **that same cell's** 2019–2023
+observations, because `build_sql` defines the baseline per cell and season.
+S5 therefore tests generalisation to **new locations whose history is known**,
+not to a location with no history at all. This is stated in the report and in
+the model card; it is the intended reading of §6, and it is the honest ceiling
+of what this dataset can demonstrate.
+
+**(k) Reported missingness.** The 2023 season is a **training** season in S5, so
+the S4 figure "`ndvi_roll3` missing for 73.41 % of 2023's *scored rows*" is no
+longer a test-side number. The report must state both (a) train-side
+missingness per training season including 2023, and (b) test-side missingness on
+the 2024 held-out-block rows, and say explicitly whether the 73 % shift
+persists anywhere on the S5 test side.
+
 ## 6. Splits and evaluation
 
 * **Temporal holdout:** train 2019–2023, test 2024.
