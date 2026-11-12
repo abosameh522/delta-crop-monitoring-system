@@ -1,14 +1,16 @@
-"""S3: XGBoost on the temporal split (train 2019-2023, test 2024).
+"""S3/S4: XGBoost on the temporal split and leave-one-season-out folds.
 
-One model per variant is trained once on all training rows and then evaluated
-on strata, populations and the onset subset without retraining. The
-hyperparameters, early-stopping season (2023) and refit procedure are frozen in
-``docs/phase7-preregistration.md`` (section 5.3).
+One model per variant is trained once per fold on all training rows and then
+evaluated on strata, populations and the onset subset without retraining. The
+hyperparameters, early-stopping season and refit procedure are frozen in
+``docs/phase7-preregistration.md`` (sections 5.3 and 5.4).
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
+import gc
 import json
 import os
 import resource
@@ -23,11 +25,17 @@ import xgboost as xgb
 from delta_crops.config import Config, load_config
 from delta_crops.models.baselines import (
     Group,
-    brier,
     group_mask,
     score_metrics,
 )
-from delta_crops.models.dataset import FEATURES, build_sql, connect, temporal_split
+from delta_crops.models.dataset import (
+    FEATURES,
+    Split,
+    build_sql,
+    connect,
+    loso_splits,
+    temporal_split,
+)
 
 SEED = 20260701
 VALIDATION_YEAR = 2023
@@ -73,6 +81,20 @@ assert not set(NDVI_ONLY_FEATURES) & set(WEATHER_COLUMNS)
 assert set(FULL_FEATURES) == set(NDVI_ONLY_FEATURES) | set(WEATHER_COLUMNS)
 
 
+def release_memory() -> None:
+    """Drop freed frames and hand the pages back to the OS between folds.
+
+    Six folds of ~15 M rows would otherwise keep every freed pandas block in the
+    process allocator and the OS kills the job; this only frees memory that is
+    already unreachable, it changes no computation.
+    """
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
+
+
 @dataclass(frozen=True)
 class FitPlan:
     """Seasons passed to early stopping and to the final refit."""
@@ -86,7 +108,8 @@ class FitPlan:
         return (*self.fit_years, self.validation_year)
 
 
-def temporal_plan(train_years: tuple[int, ...], validation_year: int = VALIDATION_YEAR) -> FitPlan:
+def temporal_plan(train_years: tuple[int, ...],
+                  validation_year: int = VALIDATION_YEAR) -> FitPlan:
     """Fit on every training season but the validation one, then refit on all."""
     years = tuple(sorted(train_years))
     if validation_year not in years:
@@ -98,6 +121,12 @@ def temporal_plan(train_years: tuple[int, ...], validation_year: int = VALIDATIO
     )
 
 
+def loso_plan(train_years: tuple[int, ...]) -> FitPlan:
+    """Early-stop on the most recent remaining training season, then refit on all."""
+    years = tuple(sorted(train_years))
+    return temporal_plan(years, validation_year=years[-1])
+
+
 def split_fit_validation(train_frame, plan: FitPlan):
     fit = train_frame[train_frame["year"] != plan.validation_year]
     validation = train_frame[train_frame["year"] == plan.validation_year]
@@ -106,6 +135,24 @@ def split_fit_validation(train_frame, plan: FitPlan):
     if set(validation["year"].unique()) != {plan.validation_year}:
         raise ValueError("validation frame contains a season outside the plan")
     return fit, validation
+
+
+def fold_frames(all_rows, split: Split):
+    """Split the built rows exactly as the fold says, and refuse anything else.
+
+    The builder already writes a ``split`` column, but the training path must not
+    trust it blindly: a held-out season in the training side is the temporal leak
+    this project exists to rule out.
+    """
+    train = all_rows[all_rows["split"] == "train"].reset_index(drop=True)
+    test = all_rows[all_rows["split"] == "test"].reset_index(drop=True)
+    if set(train["year"].unique()) != set(split.train_years):
+        raise ValueError(f"training rows are not exactly {split.train_years}")
+    if set(test["year"].unique()) != {split.test_year}:
+        raise ValueError(f"test rows are not exactly {split.test_year}")
+    if set(train["year"].unique()) & set(test["year"].unique()):
+        raise ValueError("a season appears on both sides of the fold")
+    return train, test
 
 
 def load_frames(root: Path, config: Config, split, temp_dir: Path,
@@ -186,6 +233,8 @@ def reliability_table(y: np.ndarray, probability: np.ndarray, bins: int = 10) ->
         rows.append({
             "bin": f"{edges[b]:.1f}-{edges[b + 1]:.1f}",
             "rows": int(mask.sum()),
+            "sum_probability": float(probability[mask].sum()),
+            "sum_positive": float(y[mask].sum()),
             "mean_probability": float(probability[mask].mean()) if mask.any() else None,
             "observed_rate": float(y[mask].mean()) if mask.any() else None,
         })
@@ -226,98 +275,36 @@ def evaluate_predictions(test_frame, prediction: np.ndarray,
     return result
 
 
-def compact_table(report: dict[str, Any], baselines: dict[str, Any]) -> str:
-    def fmt(value, digits=4):
-        return "n/a" if value is None else f"{value:.{digits}f}"
-
-    lines = [
-        f"temporal split (train 2019-2023, validation 2023, test 2024)",
-        f"{'group':20s} {'model':7s} {'PR-AUC':>8s} {'P@R.5':>7s} {'R@P.5':>7s} "
-        f"{'lift':>7s} {'ROC':>7s} {'Brier':>7s}",
-    ]
-    for group in REPORT_GROUPS:
-        group_name = group.name
-        baseline_group = baselines.get(group_name, {})
-        for model in ("B0", "B1", "B2", "B3"):
-            metrics = baseline_group.get("models", {}).get(model)
-            if metrics is None:
-                continue
-            lines.append(
-                f"{group_name:20s} {model:7s} {fmt(metrics['pr_auc']):>8s} "
-                f"{fmt(metrics['precision_at_recall_0_5']):>7s} "
-                f"{fmt(metrics['recall_at_precision_0_5']):>7s} "
-                f"{fmt(metrics['lift_over_prevalence'], 2):>7s} "
-                f"{fmt(metrics['roc_auc']):>7s} {fmt(metrics['brier']):>7s}"
-            )
-        for variant, payload in report["variants"].items():
-            metrics = payload["groups"].get(group_name, {}).get("models", {}).get("M")
-            if metrics is None:
-                continue
-            lines.append(
-                f"{group_name:20s} M-{variant:5s} {fmt(metrics['pr_auc']):>8s} "
-                f"{fmt(metrics['precision_at_recall_0_5']):>7s} "
-                f"{fmt(metrics['recall_at_precision_0_5']):>7s} "
-                f"{fmt(metrics['lift_over_prevalence'], 2):>7s} "
-                f"{fmt(metrics['roc_auc']):>7s} {fmt(metrics['brier']):>7s}"
-            )
-        lines.append("")
-    return "\n".join(lines)
-
-
-def load_baseline_report(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    groups = None
-    for report in payload["reports"]:
-        if report["split"]["name"] == "temporal":
-            groups = report["groups"]
-            break
-    if groups is None:
+def load_baselines_by_split(path: Path) -> dict[str, dict[str, Any]]:
+    """Temporal and LOSO baseline groups, keyed by split name."""
+    result: dict[str, dict[str, Any]] = {}
+    for candidate in (path, path.with_name("baselines_onset_metrics.json")):
+        if not candidate.exists():
+            continue
+        payload = json.loads(candidate.read_text(encoding="utf-8"))
+        for report in payload["reports"]:
+            name = report["split"]["name"]
+            result[name] = {**result.get(name, {}), **report["groups"]}
+    if "temporal" not in result:
         raise ValueError("temporal baseline report not found")
-    onset_path = path.with_name("baselines_onset_metrics.json")
-    if onset_path.exists():
-        onset = json.loads(onset_path.read_text(encoding="utf-8"))
-        for report in onset["reports"]:
-            if report["split"]["name"] == "temporal":
-                groups = {**groups, **report["groups"]}
-                break
-    return groups
+    return result
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=None)
-    parser.add_argument("--data-dir", default=None)
-    parser.add_argument("--split", choices=("temporal",), default="temporal")
-    parser.add_argument("--variant", choices=(*VARIANTS, "all"), default="all")
-    parser.add_argument("--out", default="artifacts/phase7")
-    parser.add_argument("--baselines", default="artifacts/phase7/baselines_metrics.json")
-    parser.add_argument("--temp-dir", default="/tmp/delta_crops_phase7")
-    parser.add_argument("--skip-sanity", action="store_true",
-                        help="skip the B3-feature and permutation controls (debug only)")
-    args = parser.parse_args(argv)
-
-    config = load_config(args.config)
-    root = Path(args.data_dir) if args.data_dir else Path("data")
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    started = time.perf_counter()
-
-    split = temporal_split(config.seasons.years)
-    plan = temporal_plan(split.train_years)
+def run_fold(root: Path, config: Config, split: Split, plan: FitPlan,
+             selected: dict[str, list[str]], temp_dir: Path,
+             baselines: dict[str, dict[str, Any]], skip_sanity: bool) -> dict[str, Any]:
+    """Train and score every selected variant on one split, with both controls."""
+    fold_started = time.perf_counter()
     print(f"split {split.name}: fit {plan.fit_years}, validation {plan.validation_year}, "
           f"refit {plan.final_years}, test {split.test_year}", flush=True)
 
-    train_all = load_frames(root, config, split, Path(args.temp_dir))
-    train = train_all[train_all["split"] == "train"].reset_index(drop=True)
-    test = train_all[train_all["split"] == "test"].reset_index(drop=True)
+    train_all = load_frames(root, config, split, temp_dir)
+    train, test = fold_frames(train_all, split)
+    del train_all
     fit, validation = split_fit_validation(train, plan)
     print(f"rows train {len(train):,} fit {len(fit):,} validation {len(validation):,} "
           f"test {len(test):,}", flush=True)
 
-    if args.variant == "all":
-        selected = dict(VARIANTS)
-    else:
-        selected = {args.variant: VARIANTS[args.variant]}
     variants: dict[str, Any] = {}
     for name, features in selected.items():
         variant_started = time.perf_counter()
@@ -351,28 +338,31 @@ def main(argv: list[str] | None = None) -> int:
         print(f"variant {name}: best round {rounds} "
               f"(validation PR-AUC {booster.best_score:.4f}), "
               f"{variants[name]['seconds']}s", flush=True)
+        del booster, final_model, prediction, history
+        release_memory()
 
     sanity: dict[str, Any] = {}
-    if not args.skip_sanity:
-        # (i) XGBoost on the three B3 features must match B3 within 0.02.
+    if not skip_sanity:
+        # (i) XGBoost on the three B3 features must match this fold's B3.
         booster3, rounds3, _ = fit_with_early_stopping(fit, validation, B3_FEATURES)
         model3 = refit(train, B3_FEATURES, rounds3)
         prediction3 = predict(model3, test, B3_FEATURES)
         group3 = evaluate_predictions(test, prediction3, (REPORT_GROUPS[0],))
         m3 = group3[REPORT_GROUPS[0].name]["models"]["M"]
-        b3_reference = load_baseline_report(Path(args.baselines))["cropland/pooled"]["models"]["B3"]
-        floor = b3_reference["pr_auc"] - 0.02
+        reference = baselines[split.name]["cropland/pooled"]["models"]["B3"]
+        floor = reference["pr_auc"] - 0.02
         sanity["b3_features"] = {
             "features": B3_FEATURES, "rounds": rounds3,
-            "pr_auc": m3["pr_auc"], "b3_pr_auc": b3_reference["pr_auc"],
+            "pr_auc": m3["pr_auc"], "b3_pr_auc": reference["pr_auc"],
             "floor": floor, "passed": bool(m3["pr_auc"] >= floor),
         }
         if not sanity["b3_features"]["passed"]:
             raise RuntimeError(
-                f"B3-feature sanity failed: {m3['pr_auc']:.4f} < {floor:.4f}"
+                f"{split.name} B3-feature sanity failed: "
+                f"{m3['pr_auc']:.4f} < {floor:.4f}"
             )
 
-        # (ii) Permuted labels in each season; permuted test labels too.
+        # (ii) Labels permuted within each training season, and within the test.
         train_permuted = permute_within_season(train, SEED)
         test_permuted = permute_within_season(test, SEED + 1)
         fit_permuted = train_permuted[train["year"].to_numpy() != plan.validation_year]
@@ -394,34 +384,268 @@ def main(argv: list[str] | None = None) -> int:
         }
         if not sanity["permuted_labels"]["passed"]:
             raise RuntimeError(
-                f"permuted-label sanity failed: {ap:.4f} vs {prevalence:.4f}"
+                f"{split.name} permuted-label sanity failed: {ap:.4f} vs {prevalence:.4f}"
             )
-        print("sanity:", json.dumps(sanity), flush=True)
+        print(f"sanity {split.name}:", json.dumps(sanity), flush=True)
+        del booster3, model3, prediction3, booster_p, model_p, prediction_p
+        release_memory()
 
     week_index = (
         test.groupby("week_index")["label"].agg(["size", "mean"]).reset_index()
         .rename(columns={"size": "rows", "mean": "positive_rate"}).to_dict("records")
     )
-    payload = {
-        "seed": SEED,
+    result = {
         "split": {"name": split.name, "train_years": list(split.train_years),
                   "test_year": split.test_year},
         "plan": {"fit_years": list(plan.fit_years),
                  "validation_year": plan.validation_year,
                  "final_years": list(plan.final_years)},
-        "params": {key: value for key, value in PARAMS.items() if key != "nthread"},
+        "rows": {"train": int(len(train)), "fit": int(len(fit)),
+                 "validation": int(len(validation)), "test": int(len(test))},
         "variants": variants,
         "sanity": sanity,
         "week_index_test": week_index,
-        "seconds": round(time.perf_counter() - started, 2),
-        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1),
+        "seconds": round(time.perf_counter() - fold_started, 2),
     }
-    path = out_dir / "xgb_temporal.json"
-    path.write_text(json.dumps(payload, indent=2, default=float) + "\n", encoding="utf-8")
-    baselines = load_baseline_report(Path(args.baselines))
-    print(compact_table(payload, baselines), flush=True)
-    print(json.dumps({"seconds": payload["seconds"], "peak_rss_mb": payload["peak_rss_mb"],
-                      "out": str(path)}), flush=True)
+    del train, test, fit, validation
+    release_memory()
+    print(f"{split.name} done in {result['seconds']}s, process peak RSS so far "
+          f"{resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0:.0f} MB",
+          flush=True)
+    return result
+
+
+def _summary(values: list[float]) -> dict[str, float] | None:
+    clean = [float(value) for value in values if value is not None]
+    if not clean:
+        return None
+    return {
+        "mean": float(np.mean(clean)),
+        "std": float(np.std(clean, ddof=1)) if len(clean) > 1 else 0.0,
+        "min": float(np.min(clean)),
+        "max": float(np.max(clean)),
+    }
+
+
+def _b3_mean(baselines: dict[str, dict[str, Any]], folds: list[dict[str, Any]],
+             metric: str) -> float:
+    values = [baselines[fold["split"]["name"]]["cropland/pooled"]["models"]["B3"][metric]
+              for fold in folds]
+    return float(np.mean(values))
+
+
+def summarise_loso(folds: list[dict[str, Any]],
+                   baselines: dict[str, dict[str, Any]],
+                   variants: list[str]) -> dict[str, Any]:
+    """Mean/std/min/max per view, plus pooled reliability and the frozen verdict."""
+    summary: dict[str, Any] = {"folds": [fold["split"]["name"] for fold in folds],
+                               "groups": {}, "per_fold": {}}
+    for group in REPORT_GROUPS:
+        name = group.name
+        entry: dict[str, Any] = {}
+        b3 = [baselines[fold["split"]["name"]][name]["models"]["B3"]["pr_auc"]
+              for fold in folds]
+        entry["B3"] = {"per_fold": dict(zip(summary["folds"], b3)),
+                       "pr_auc": _summary(b3)}
+        for variant in variants:
+            rows = [fold["variants"][variant]["groups"][name]["models"]["M"]
+                    for fold in folds]
+            entry[variant] = {
+                "per_fold": dict(zip(summary["folds"],
+                                     [row["pr_auc"] for row in rows])),
+                "pr_auc": _summary([row["pr_auc"] for row in rows]),
+                "precision_at_recall_0_5": _summary(
+                    [row["precision_at_recall_0_5"] for row in rows]),
+                "recall_at_precision_0_5": _summary(
+                    [row["recall_at_precision_0_5"] for row in rows]),
+                "brier": _summary([row["brier"] for row in rows]),
+                "roc_auc": _summary([row["roc_auc"] for row in rows]),
+                "lift_over_prevalence": _summary(
+                    [row["lift_over_prevalence"] for row in rows]),
+            }
+        summary["groups"][name] = entry
+
+    # Pool the cropland/pooled reliability bins over all held-out seasons.
+    pooled = None
+    for fold in folds:
+        table = fold["variants"]["full"]["reliability_cropland_pooled"]
+        if pooled is None:
+            pooled = [dict(row) for row in table]
+        else:
+            for left, right in zip(pooled, table):
+                left["rows"] += right["rows"]
+                left["sum_probability"] += right["sum_probability"]
+                left["sum_positive"] += right["sum_positive"]
+    for row in pooled or []:
+        row["mean_probability"] = (row["sum_probability"] / row["rows"]
+                                   if row["rows"] else None)
+        row["observed_rate"] = (row["sum_positive"] / row["rows"]
+                                if row["rows"] else None)
+    summary["reliability_cropland_pooled_pooled"] = pooled
+    summary["reliability_cropland_pooled_loso_2024"] = folds[-1]["variants"]["full"][
+        "reliability_cropland_pooled"]
+
+    headline = summary["groups"]["cropland/pooled"]
+    b3_pr = headline["B3"]["pr_auc"]["mean"]
+    b3_precision = _b3_mean(baselines, folds, "precision_at_recall_0_5")
+    b3_brier = _b3_mean(baselines, folds, "brier")
+    checks = {}
+    for variant in variants:
+        entry = headline[variant]
+        checks[variant] = {
+            "pr_auc": entry["pr_auc"]["mean"],
+            "pr_auc_bar": b3_pr + 0.05,
+            "pr_auc_passed": bool(entry["pr_auc"]["mean"] >= b3_pr + 0.05),
+            "precision_at_recall_0_5": entry["precision_at_recall_0_5"]["mean"],
+            "p_at_r_5_bar": b3_precision,
+            "p_at_r_5_passed": bool(
+                entry["precision_at_recall_0_5"]["mean"] > b3_precision),
+            "brier": entry["brier"]["mean"],
+            "brier_bar": b3_brier,
+            "brier_passed": bool(entry["brier"]["mean"] < b3_brier),
+        }
+        checks[variant]["all_passed"] = bool(
+            checks[variant]["pr_auc_passed"]
+            and checks[variant]["p_at_r_5_passed"]
+            and checks[variant]["brier_passed"])
+    summary["verdict"] = {"reference": "mean B3 over the six folds", "variants": checks}
+    return summary
+
+
+def compact_table(report: dict[str, Any], baselines: dict[str, Any]) -> str:
+    def fmt(value, digits=4):
+        return "n/a" if value is None else f"{value:.{digits}f}"
+
+    lines = [
+        "temporal split (train 2019-2023, validation 2023, test 2024)",
+        f"{'group':20s} {'model':7s} {'PR-AUC':>8s} {'P@R.5':>7s} {'R@P.5':>7s} "
+        f"{'lift':>7s} {'ROC':>7s} {'Brier':>7s}",
+    ]
+    for group in REPORT_GROUPS:
+        group_name = group.name
+        baseline_group = baselines.get(group_name, {})
+        for model in ("B0", "B1", "B2", "B3"):
+            metrics = baseline_group.get("models", {}).get(model)
+            if metrics is None:
+                continue
+            lines.append(
+                f"{group_name:20s} {model:7s} {fmt(metrics['pr_auc']):>8s} "
+                f"{fmt(metrics['precision_at_recall_0_5']):>7s} "
+                f"{fmt(metrics['recall_at_precision_0_5']):>7s} "
+                f"{fmt(metrics['lift_over_prevalence'], 2):>7s} "
+                f"{fmt(metrics['roc_auc']):>7s} {fmt(metrics['brier']):>7s}"
+            )
+        for variant, payload in report["variants"].items():
+            metrics = payload["groups"].get(group_name, {}).get("models", {}).get("M")
+            if metrics is None:
+                continue
+            lines.append(
+                f"{group_name:20s} M-{variant:5s} {fmt(metrics['pr_auc']):>8s} "
+                f"{fmt(metrics['precision_at_recall_0_5']):>7s} "
+                f"{fmt(metrics['recall_at_precision_0_5']):>7s} "
+                f"{fmt(metrics['lift_over_prevalence'], 2):>7s} "
+                f"{fmt(metrics['roc_auc']):>7s} {fmt(metrics['brier']):>7s}"
+            )
+        lines.append("")
+    return "\n".join(lines)
+
+
+def loso_table(summary: dict[str, Any], variants: list[str]) -> str:
+    def fmt(value, digits=4):
+        return "n/a" if value is None else f"{value:.{digits}f}"
+
+    folds = summary["folds"]
+    lines = [f"{'group':20s} {'model':10s} " + " ".join(f"{name:>9s}" for name in folds)
+             + f" {'mean':>9s} {'std':>8s} {'min':>9s} {'max':>9s}"]
+    for group in [g.name for g in REPORT_GROUPS]:
+        entry = summary["groups"][group]
+        series = [("B3", entry["B3"]["pr_auc"], entry["B3"]["per_fold"])]
+        for variant in variants:
+            series.append((f"M-{variant}", entry[variant]["pr_auc"],
+                           entry[variant]["per_fold"]))
+        for label, stats, per_fold in series:
+            cells = " ".join(f"{fmt(per_fold[name]):>9s}" for name in folds)
+            lines.append(
+                f"{group:20s} {label:10s} {cells} {fmt(stats['mean']):>9s} "
+                f"{fmt(stats['std']):>8s} {fmt(stats['min']):>9s} {fmt(stats['max']):>9s}"
+            )
+        lines.append("")
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--data-dir", default=None)
+    parser.add_argument("--split", choices=("temporal", "loso", "all"), default="temporal")
+    parser.add_argument("--variant", choices=(*VARIANTS, "all"), default="all")
+    parser.add_argument("--out", default="artifacts/phase7")
+    parser.add_argument("--baselines", default="artifacts/phase7/baselines_metrics.json")
+    parser.add_argument("--temp-dir", default="/tmp/delta_crops_phase7")
+    parser.add_argument("--skip-sanity", action="store_true",
+                        help="skip the B3-feature and permutation controls (debug only)")
+    args = parser.parse_args(argv)
+
+    config = load_config(args.config)
+    root = Path(args.data_dir) if args.data_dir else Path("data")
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    started = time.perf_counter()
+    baselines = load_baselines_by_split(Path(args.baselines))
+    selected = (dict(VARIANTS) if args.variant == "all"
+                else {args.variant: VARIANTS[args.variant]})
+    temp_dir = Path(args.temp_dir)
+    params = {key: value for key, value in PARAMS.items() if key != "nthread"}
+
+    if args.split in ("temporal", "all"):
+        split = temporal_split(config.seasons.years)
+        plan = temporal_plan(split.train_years)
+        fold = run_fold(root, config, split, plan, selected, temp_dir, baselines,
+                        args.skip_sanity)
+        temporal = {
+            "seed": SEED,
+            "split": fold["split"],
+            "plan": fold["plan"],
+            "params": params,
+            "variants": fold["variants"],
+            "sanity": fold["sanity"],
+            "week_index_test": fold["week_index_test"],
+            "seconds": fold["seconds"],
+            "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                                 / 1024.0, 1),
+        }
+        path = out_dir / "xgb_temporal.json"
+        path.write_text(json.dumps(temporal, indent=2, default=float) + "\n",
+                        encoding="utf-8")
+        print(compact_table(temporal, baselines["temporal"]), flush=True)
+        print(json.dumps({"seconds": temporal["seconds"],
+                          "peak_rss_mb": temporal["peak_rss_mb"],
+                          "out": str(path)}), flush=True)
+
+    if args.split in ("loso", "all"):
+        folds = []
+        for split in loso_splits(config.seasons.years):
+            folds.append(run_fold(root, config, split, loso_plan(split.train_years),
+                                  selected, temp_dir, baselines,
+                                  args.skip_sanity))
+        summary = summarise_loso(folds, baselines, list(selected))
+        loso = {
+            "seed": SEED,
+            "params": params,
+            "folds": folds,
+            "summary": summary,
+            "seconds": round(time.perf_counter() - started, 2),
+            "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                                 / 1024.0, 1),
+        }
+        path = out_dir / "xgb_loso.json"
+        path.write_text(json.dumps(loso, indent=2, default=float) + "\n",
+                        encoding="utf-8")
+        print(loso_table(summary, list(selected)), flush=True)
+        print(json.dumps({"verdict": summary["verdict"],
+                          "seconds": loso["seconds"],
+                          "peak_rss_mb": loso["peak_rss_mb"],
+                          "out": str(path)}), flush=True)
     return 0
 
 
