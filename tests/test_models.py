@@ -245,3 +245,13 @@ def test_feature_list_has_no_label_or_future_columns() -> None:
                  "test_year", "week_start", "cell_id", "year", "block_5km"}
     assert not forbidden & set(FEATURES)
     assert "anomaly_t" in FEATURES and "baseline_mean" in FEATURES
+
+
+def test_b3_lagged_anomaly_is_exported_but_not_a_model_feature(tmp_path: Path) -> None:
+    split = _fixture(tmp_path)
+    df = _frame(tmp_path, split)
+    assert "anomaly_lag1" in df.columns
+    assert "anomaly_lag1" not in FEATURES
+    lagged = df[(df.cell_id == 1) & (df.week_start.dt.date == _week_start(2020, 20))].iloc[0]
+    current = _row(df, 1, _week_start(2020, 19))
+    assert lagged["anomaly_lag1"] == pytest.approx(current["anomaly_t"], abs=1e-6)

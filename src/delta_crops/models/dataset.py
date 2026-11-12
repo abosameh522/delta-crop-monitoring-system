@@ -197,6 +197,7 @@ WITH ndvi AS (
            LAG(w.ndvi_mean, 1) OVER p AS ndvi_lag1,
            LAG(w.ndvi_mean, 2) OVER p AS ndvi_lag2,
            LAG(w.ndvi_mean, 3) OVER p AS ndvi_lag3,
+           LAG(w.anomaly, 1) OVER p AS anomaly_lag1,
            LEAD(w.anomaly, 1) OVER p AS fwd_a1,
            LEAD(w.anomaly, 2) OVER p AS fwd_a2,
            LEAD(w.status, 1) OVER p AS fwd_s1,
@@ -254,6 +255,7 @@ SELECT
     CAST(l.ndvi_lag1 AS FLOAT) AS ndvi_lag1,
     CAST(l.ndvi_lag2 AS FLOAT) AS ndvi_lag2,
     CAST(l.ndvi_lag3 AS FLOAT) AS ndvi_lag3,
+    CAST(l.anomaly_lag1 AS FLOAT) AS anomaly_lag1,
     CAST((l.ndvi_mean + l.ndvi_lag1) / 2.0 AS FLOAT) AS ndvi_roll2,
     CAST((l.ndvi_mean + l.ndvi_lag1 + l.ndvi_lag2) / 3.0 AS FLOAT) AS ndvi_roll3,
     CAST((l.ndvi_mean - l.ndvi_lag2) / 2.0 AS FLOAT) AS ndvi_slope_2w,
@@ -353,7 +355,7 @@ def build(
             tmp = target.with_suffix(".parquet.tmp")
             columns = ", ".join(
                 ["year", "cell_id", "week_start", "split", "test_year", "label"]
-                + list(FEATURES) + ["block_5km", "fwd_anomaly_2w"]
+                + list(FEATURES) + ["anomaly_lag1", "block_5km", "fwd_anomaly_2w"]
             )
             con.execute(
                 f"COPY (SELECT {columns} FROM ({sql}) t ORDER BY year, cell_id, week_start) "
