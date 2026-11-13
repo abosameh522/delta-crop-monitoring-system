@@ -10,6 +10,41 @@
   Streamlit pages and one-command launch; freeze at
   [`docs/phase8-predictions-freeze.md`](docs/phase8-predictions-freeze.md), design in PROJECT.md
   §3.16 and D-052…D-057. Suite `234 passed, 1 deselected`.
+  **Phase 9 — packaging and documentation CLOSED 2026-11-13**: README rewritten with a generated
+  results table and three real screenshots, `docs/limitations.md`, `scripts/demo.sh` +
+  `docs/demo-2min.md`, an optional Compose `dashboard` profile, a fresh-clone acceptance run, and
+  code licence MIT. Design in PROJECT.md §3.17 and D-058…D-062. Suite `240 passed, 2 deselected`
+  with the lake; `-m slow` 2 passed; a fresh clone (no lake, no artifacts) passes 231 / 9 skipped /
+  2 deselected.
+- **Phase 9 evidence (2026-11-13):**
+  - `scripts/gold_regression.py` re-run after 2024: **15/15 table-years OK, 0 differences,
+    48.14 s** (Gold rebuilt in 41.28 s), including all five `ndvi_anomaly` years. Reason it does not
+    contradict the earlier drift caveat: `build_anomaly` pools only the years it is asked to
+    rebuild (`years=2019..2023`), so the five-year snapshot reproduces exactly; the **2024** anomaly
+    is still uncovered (no snapshot for it). Recorded in [`docs/limitations.md`](docs/limitations.md) §4.
+    The script and its thresholds were not edited.
+  - Fresh clone `/tmp/phase9-fresh` at commit `2cebf27`: `uv venv` + editable install
+    `.[dev,dashboard]` OK; `pytest -q` → **231 passed, 9 skipped, 2 deselected in 32.14 s**
+    (the 9 skips are the dashboard/README tests that need `data/` and `artifacts/`). Reused the
+    existing lake via flags (`--data-dir`, `--root`, `DELTA_CROPS_*`); the **only rebuilt step**
+    was the prediction dump, rerun in the clone:
+    `python -m delta_crops.models.predictions` → 6,053,122 rows, 29.6 MB, 555.7 s, 8,731.7 MB peak,
+    gate 10/10 delta 0.0, and the output is **byte-identical** to the existing dump
+    (`sha256 d9938f82…` on both). Dashboard served on 8503, `/` → 200, `/_stcore/health` → ok, the
+    Predictions page rendered the scoreboard and the 17-vs-20 note. Nothing was downloaded and no
+    Bronze/Silver/Gold table was rebuilt.
+  - Compose: `HOST_UID=1000 HOST_GID=1000 docker compose --profile dashboard build` → images
+    `delta-crops:local` and `delta-crops:dashboard`; `--profile dashboard up -d` → server,
+    orchestrator, `health-publish` (exited 0 after writing one JSON) and dashboard all healthy;
+    `curl 8501/` → 200, `/_stcore/health` → ok; mounts `data/` and `artifacts/` **rw=false**;
+    dashboard image streamlit 1.67.0, pipeline image `streamlit None`; headless Chromium inside the
+    container rendered “2,468 blocks · 194,777 cells · … week starting 2024-07-15”. Containers then
+    brought down.
+  - Screenshots captured from the running app: `docs/images/map.png` (2024-07-15, 2,468 blocks /
+    194,777 cells), `docs/images/predictions.png` (2024-07-08), `docs/images/health.png`
+    (full-height 1440 × 2157, S5 gap visible).
+  - `scripts/readme_results.py --check` → the committed block matches the artifacts;
+    `tests/test_docs.py` 7 passed.
 - **Season 2024 (2026-11-12, run by Ahmed by hand, no flow, no Docker):** config years are now
   `[2019, 2020, 2021, 2022, 2023, 2024]` with `focus: 2023` (commit `701d7b7`). Ingest
   `305 downloaded, 46 skipped, 0 failed` in 4451.5 s; `verify --year 2024` 351/351 assets from
@@ -100,16 +135,16 @@
   `-m slow` 1 test; Gold regression 15/15 identical (47.15 s). Current counts are in
   the status section above: host full suite `150 passed, 1 deselected`; quick loop `139 passed,
   12 deselected`.
-- **Half-done / NOT DONE:** Phase 6b Docker verification is complete; the real Silver/Gold are
+- **Half-done / NOT DONE:** nothing is pending. Phase 9 is closed: README, limitations page, demo
+  script, Compose dashboard profile and fresh-clone acceptance are done. The real Silver/Gold are
   adopted (2026-11-11) and season 2024 is built through Gold (2026-11-12), but the scheduled flow
-  has never run end-to-end on real data. `gold_regression.py` was not re-run after 2024 and the
-  `ndvi_anomaly` 2019–2023 files were not compared with the old snapshot. **Phase 7 and Phase 8
-  are closed (2026-11-13).** S5 has no reliability table because predictions were not persisted —
-  a documented gap, not a pending task, and the Health page shows it as one.
-- **Next:** nothing is pending. The prediction dump
-  (`artifacts/phase8/predictions/temporal_2024.parquet`, 6,053,122 rows, 29.6 MB) reproduces S3 with
-  zero delta on all ten gate checks; the dashboard is `delta-crops-dashboard`; the health summary is
-  published. Phase 9 starts only on approval for Phase 9.
+  has never run end-to-end on real data. `gold_regression.py` **was** re-run in Phase 9 (15/15 OK,
+  0 differences). **Phase 7, 8 and 9 are closed (2026-11-13).** S5 has no reliability table because
+  predictions were not persisted — a documented gap, not a pending task, and the Health page shows
+  it as one. The carry-over limits (DN = 0 date, unscheduled real-data flow, container concurrency,
+  2024 anomaly coverage, S5 calibration) are listed in [`docs/limitations.md`](docs/limitations.md).
+- **Next:** none — the project is complete. If work resumes: the four carry-over items
+  above, in that order, each as its own phase starting with a short plan. Nothing else is queued.
 
 Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 
@@ -124,7 +159,7 @@ Legend: `TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`
 | 6 | Orchestration | DONE | 6a accepted; 6b verified on the host: container suite 133 passed / 6 skipped / 12 deselected, integration 1 passed, idle RAM 104 + 234.5 MiB. Real Silver/Gold adopted 2026-11-11 (293 + 15 sidecars, outputs byte-identical). Open: scheduled flow never run on real data, container concurrency, heartbeat, uv tag pin. |
 | 7 | Modeling | DONE | S1 14,977,696 rows; B0–B3 (`8b0164b`, `770d885`, `98938ce`); S3 `ace7352` 0.8213705 vs bar 0.8222002; S4 `68215bd` 0.8191470 vs bar 0.8205095; S5 `2a30b52` 0.8007195 vs bar 0.8147217. **All three FAIL on PR-AUC only**; P@R.5 and Brier pass. Model card `docs/model-card.md`. |
 | 8 | Dashboard | DONE | S3 dump gate 10/10 exact (6,053,122 rows, 17 weeks); Option A health publish is byte-idempotent; Map/Season/Predictions/Pipeline Health pages verified with `AppTest`; `delta-crops-dashboard` one command; corruption rejected; 234 tests pass. |
-| 9 | Packaging and documentation | TODO | |
+| 9 | Packaging and documentation | DONE | README rewritten (generated results table, 3 screenshots, architecture, trade-offs, credits, quick start, lake paths, Compose, limitations, future work); `docs/limitations.md`; `scripts/demo.sh` + `docs/demo-2min.md`; optional Compose `dashboard` profile with read-only mounts; MIT `LICENSE`; fresh clone green (231 passed / 9 skipped / 2 deselected) and the prediction dump rebuilt byte-identically (555.7 s); `gold_regression.py` 15/15 OK, 0 differences. Suite `240 passed, 2 deselected`. |
 
 Phases 2–5 figures above describe the original 2019–2023 build. Season 2024 (2026-11-12) adds 351
 Bronze assets and 59 Silver dates: 352 ledger dates and 84,235,008 quality rows in total. Per-year
@@ -536,3 +571,64 @@ server was stopped afterwards. Deliberate corruption on a temp copy of the real 
 Block polygons are centroid envelopes (± half a 100 m cell), not true footprints. No auth, no
 Docker, local demo only. The dashboard adds no new evidence: S3 still fails PR-AUC, and S5
 calibration remains unmeasured. Phase 9 not started.
+
+## Phase 9 completion — 2026-11-13 (packaging and documentation)
+
+**Commits.** `62d766d` chore(compose) → `3d513ea` feat(demo) → `b58c4bb` docs(readme)
+(`19fc490` was amended into it to add the artifacts skip guard) → `2cebf27` test(silver) →
+`docs(phase9): record the acceptance run and final state`. No pipeline logic changed: the only
+non-documentation code edits are the `slow` marker on one existing test and the Docker build stage /
+compose profile.
+
+**README.** Problem, headline result, generated results table, three screenshots, Mermaid data flow,
+layer table, trade-off table, exact data credits, quick start, both lake paths, dashboard, Compose,
+limitations, future work, layout, tests, licence. **Every results number is generated**:
+`scripts/readme_results.py` renders between `<!-- results:start -->` / `<!-- results:end -->` from
+`xgb_temporal.json`, `xgb_loso.json`, `xgb_spatial.json` and the B3 reference, `--check` fails on
+drift, and `tests/test_docs.py` asserts the committed block equals a fresh render with each row's
+metric equal to the artifact. Measured: `--check` → “README results block matches the artifacts”.
+
+**Honest result shape in the README.** `full` fails PR-AUC in S3 (0.8213705 vs 0.8222002), S4
+(0.8191470 vs 0.8205095) and S5 (0.8007195 vs 0.8147217) while passing P@R.5 and Brier;
+`ndvi_only` beats `full` in all three and passes all three conditions in S3 and S4 (S5 fails by
+0.0140). Weather skill is claimed **descriptively only**.
+
+**Screenshots.** Headless Chromium + chromedriver captures of the running app at its defaults:
+Map 2024-07-15 (2,468 blocks / 194,777 cells, NDVI 0.117–0.848), Predictions 2024-07-08 (2,297
+blocks), Pipeline Health full-height 1440 × 2157 showing the S5 gap. The in-app browser tool was
+disconnected, so DOM-driven chromedriver was used; the images are real renders, not mock-ups.
+
+**Demo.** `scripts/demo.sh` verifies the lake / dump / metrics, publishes health, prints the timed
+shot list and serves the app; `--check` verifies without serving (measured OK, and it reprinted the
+same published health summary). `docs/demo-2min.md` carries the narration and the do-not-say list;
+the heatwave line stays descriptive (“no visible heatwave response over six seasons”, “not proof
+that heat has no effect”).
+
+**Compose.** New `FROM runtime AS dashboard` stage (`uv sync --frozen --no-dev --extra dashboard`);
+`uv.lock` re-locked (a prerequisite for `--frozen`). Services `health-publish` (rw `./data`, writes
+one JSON) and `dashboard` (ro `./data`, ro `./artifacts`, `127.0.0.1:8501`). Images retagged
+`delta-crops:local` / `:dashboard` / `:test`; `docker compose config --quiet` valid; build and
+`--profile dashboard up -d` verified as recorded in the status section; `down` afterwards.
+
+**Fresh-clone acceptance, step by step.** Which steps **reused the existing lake**: every read step —
+`pytest -q` (data-dependent tests skip; no lake read at all), the dashboard (`DELTA_CROPS_DATA`,
+`DELTA_CROPS_ARTIFACTS` pointed at the main repo), and the health publish (`--root` pointed at the
+main repo, which rewrote the same deterministic JSON). Which steps were **rebuilt**: the prediction
+dump only — rerun in the clone from the main repo's `data/` and `xgb_temporal.json`, 555.7 s,
+8,731.7 MB peak, 6,053,122 rows, gate 10/10 delta 0.0, and **byte-identical** to the existing file
+(`sha256 d9938f82711333f7387dfcaf624d8008c5350a5934cb2734c8ee19bd760b2258` both). Nothing was
+downloaded; no Bronze, Silver or Gold table was rebuilt.
+
+**Test counts (measured, not estimated).** Main repo with the lake: `pytest -q` → **240 passed,
+2 deselected in 30.06 s**; `pytest -q -m slow` → **2 passed, 240 deselected in 48.74 s**. Fresh
+clone at `2cebf27`: **231 passed, 9 skipped, 2 deselected in 32.14 s**. `tests/test_docs.py` 7 passed.
+
+**Why one test moved.** `tests/test_silver.py::test_cross_era_stable_target_runs_and_is_within_tolerance`
+needs the persisted 2021 audit report, so it now carries `@pytest.mark.slow`: excluded from the
+default run, still selected by `-m slow`, and it still **fails** (no skip guard) when selected without
+the data. No assertion changed.
+
+**Licence.** MIT, `LICENSE` naming “Ahmed Sameh” (from git authorship). The Phase 9 brief left the
+licence as an unfilled placeholder whose first option was MIT; it is recorded as D-061 and is
+reversible by replacing `LICENSE` and README §Licence. Data licences are unchanged and credited.
+

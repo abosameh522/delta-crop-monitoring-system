@@ -652,6 +652,39 @@ works; without it the page shows a clear error. The map's block polygons are cen
 true cell footprints, so block edges are approximate (± half a 100 m cell). No server-side
 authentication is configured: the app is a local demo, not a deployment.
 
+### 3.17 Packaging and documentation (Phase 9)
+
+Phase 9 adds no pipeline logic. It makes the existing work reproducible and honestly described:
+
+- **README** carries the question, the generated results table, three real screenshots, the Mermaid
+  data flow, the trade-off table, exact data credits, a quick start, both lake paths, the dashboard,
+  Compose, limitations, future work and the layout. **No results number is typed by hand**:
+  `scripts/readme_results.py` renders the block between `<!-- results:start -->` and
+  `<!-- results:end -->` from `xgb_temporal.json`, `xgb_loso.json`, `xgb_spatial.json` and the B3
+  reference in `baselines_metrics.json`. `--check` exits non-zero on drift, and
+  `tests/test_docs.py` runs the same comparison, so a stale README fails the suite.
+- **`docs/limitations.md`** is the canonical list: the 36.70 % DN = 0 date, the unscheduled real-data
+  flow, the unproven container concurrency, the S5 calibration gap, this phase's `gold_regression`
+  result, and the model/data limits. The README links to it instead of maintaining two versions.
+- **Demo**: `scripts/demo.sh` checks the lake, dump and metrics, publishes health, prints the timed
+  shot list, and serves the app; `--check` verifies without serving. `docs/demo-2min.md` is the
+  narration, including the descriptive heatwave line and a do-not-say list.
+- **Screenshots** (`docs/images/{map,predictions,health}.png`) are headless-Chromium captures of the
+  running app at its default weeks (Map 2024-07-15, Predictions 2024-07-08; Health full-height so the
+  S5 gap is in frame). They are captures, not mock-ups.
+- **Compose** gains an optional `dashboard` profile. `health-publish` is a one-shot writer of
+  `data/gold/_reports/pipeline_health.json`; `dashboard` serves `delta-crops:dashboard` on
+  `127.0.0.1:8501` with `data/` and `artifacts/` mounted **read-only**. The default pipeline path is
+  unchanged, and `delta-crops:local` stays Streamlit-free: the dashboard is a separate build stage.
+- **Licence**: code is MIT (`LICENSE`, "Ahmed Sameh"), data keeps its own licences. The required
+  credits — ESA WorldCover 10 m 2021 v200 (CC BY 4.0, with the WorldCover credit line) and "Weather
+  data by Open-Meteo.com" (CC BY 4.0) — are in the README and pinned by a test.
+
+A fresh clone was verified against the documented steps: clone, `uv venv`, editable install,
+`pytest -q` → **231 passed, 9 skipped, 2 deselected** with no lake and no artifacts. Only the
+data-dependent steps reused the existing lake (see the Phase 9 section of `PROGRESS.md`); nothing was
+downloaded and no table was rebuilt for the acceptance run.
+
 ---
 
 ## 4. Repository layout
@@ -764,6 +797,11 @@ delta-crops-dashboard                    # http://localhost:8501, from the repo 
 | D-055 | 2026-11-13 | Dashboard modules live in `dashboard/views/` with a sidebar `radio`, not Streamlit's `pages/` convention | `pages/` triggers Streamlit's automatic multipage navigation, which cannot be exercised page-by-page in `AppTest` and would give four URLs with no shared state. A radio keeps one entry point (`delta-crops-dashboard`), makes the page choice testable, and keeps paths in one place. |
 | D-056 | 2026-11-13 | The read-only guarantee is enforced by a single-SELECT guard plus an mtime test, not by `duckdb.connect(read_only=True)` | `read_only=True` only applies to a database *file*, and the dashboard deliberately opens none — it queries Parquet. So `_select_only()` refuses any statement that is not one `SELECT`/`WITH`, and a test snapshots the mtimes of `data/` and `artifacts/phase8/` across all four pages and asserts they are unchanged. |
 | D-057 | 2026-11-13 | The Predictions page exposes 17 weeks and says why; the map slider keeps all 20 Gold weeks | Gold has 20 weeks for 2024, but the target needs `t+1` and `t+2` to be observable: `2024-09-09` and `2024-09-16` have no `t+2` inside the season, and `2024-05-06` has no anomaly (0/239,304 cells, no baseline years for that ISO week). Truncating the map slider or padding predictions would hide a real coverage difference; stating it is the honest option and it is pinned by a test. |
+| D-058 | 2026-11-13 | The README results table is **generated** by `scripts/readme_results.py` from the four Phase 7 artifacts, never typed | A hand-copied metric drifts silently and there is no way to tell a stale README from a changed model. The script renders a marked block; `--check` exits non-zero on drift and `tests/test_docs.py` asserts the committed block equals a fresh render and that each row's metric is the artifact's value. Regenerating is one command, so the docs cannot become the weakest link. |
+| D-059 | 2026-11-13 | The dashboard is an optional Compose profile (`--profile dashboard`) with a separate `delta-crops:dashboard` image; the default pipeline path is unchanged | A portfolio reviewer wants one command that includes the app, but the pipeline image should not carry Streamlit or plotly and the orchestrator should not depend on the dashboard. A separate build stage and profile gives `docker compose up -d` the same meaning as before, and `--profile dashboard` adds `health-publish` then the app. |
+| D-060 | 2026-11-13 | In Compose the dashboard mounts `data/` and `artifacts/` **read-only**, and a one-shot `health-publish` service is the only writer (one JSON) | The app's own guarantee is a SELECT-only guard plus an mtime test; a writable bind mount would make that a convention rather than a boundary. Publishing is a separate step the app depends on (`service_completed_successfully`), so the dashboard never computes or writes the health summary itself. |
+| D-061 | 2026-11-13 | Code licence is **MIT** (`LICENSE`, "Ahmed Sameh"); data keeps its own licences | The Phase 9 brief left the licence as an unfilled placeholder with MIT as the first option, so MIT was taken and recorded here rather than left blank. No third-party data is redistributed: `data/` is gitignored and rebuilt, and the README carries the WorldCover and Open-Meteo credits. Reversible: replace `LICENSE` and the README §Licence if a different licence is wanted. |
+| D-062 | 2026-11-13 | The real-data Silver stability test joins the `slow` marker instead of being skipped, and the README states measured counts | The default suite must pass on a clone with no `data/`, but skipping the test outright would hide a real-data failure. `slow` excludes it from the default run, keeps it selectable with `-m slow`, and — because it has no skip guard — still fails if selected without the report. Counts are documented per environment (231/9/2 fresh, 240/2 with the lake) so a reader can tell a real failure from a missing input. |
 
 ### D-035 — Post-hoc within-orbit stable-target comparison (2026-11-10)
 

@@ -165,7 +165,7 @@ uv pip install -e ".[dev,dashboard]"
 pytest -q
 ```
 
-Expected on a fresh clone: **231 passed, 9 skipped, 1 deselected** — no network and no data lake
+Expected on a fresh clone: **231 passed, 9 skipped, 2 deselected** — no network and no data lake
 needed; tests that need the real lake skip with a reason. On a machine with the lake and artifacts
 the default suite is **240 passed, 2 deselected**; the two slow, data-dependent tests are
 `pytest -q -m slow`. The prediction-dump and dashboard tests skip on a fresh clone — see
@@ -188,12 +188,14 @@ real work. Two paths:
 
 ### A. You already have a lake
 
-Point the tools at it; nothing is copied:
+Point the CLIs at it with `--data-dir`; nothing is copied:
 
 ```bash
-export DELTA_CROPS_DATA=/path/to/data
-python -m delta_crops.verify --year 2024      # sanity check on Bronze
+python -m delta_crops.verify --data-dir /path/to/data --year 2024   # sanity check on Bronze
 ```
+
+The pipeline and model CLIs all take `--data-dir` (default `data`). The dashboard uses its own
+`DELTA_CROPS_DATA` variable instead (see [Run the dashboard](#run-the-dashboard)).
 
 ### B. Rebuild from the sources (network, several hours, ~31 GB)
 
@@ -223,11 +225,15 @@ was 305 assets in 4,451.5 s. The 2024 build and its checks are recorded in
 > **Disk warning:** the six-season lake is ~31 GB of Bronze plus ~22 GB of Silver, and the Phase 7
 > dataset is 626 MB. Start with one season if you are exploring.
 
-The Phase 7 artifacts (metrics, dataset, prediction dump) are also gitignored. Their commands are in
-[the model card](docs/model-card.md); the dashboard needs only the **prediction dump**:
+The Phase 7 artifacts (metrics, dataset, prediction dump) are also gitignored. Rebuild them with the
+commands in [the model card](docs/model-card.md); the dashboard needs the frozen S3 metrics
+(`artifacts/phase7/xgb_temporal.json`) and the **prediction dump**:
 
 ```bash
-python -m delta_crops.models.predictions   # 561.2 s, 8,912 MB peak RSS, writes 29.6 MB
+python -m delta_crops.models.predictions \
+  --data-dir /path/to/data \
+  --metrics artifacts/phase7/xgb_temporal.json \
+  --out artifacts/phase8/predictions/temporal_2024.parquet   # 561.2 s, 8,912 MB peak RSS, 29.6 MB
 ```
 
 ## Run the dashboard
@@ -237,6 +243,15 @@ One command, from the repository root, after the lake and the prediction dump ex
 ```bash
 python -m delta_crops.dashboard.health   # publish data/gold/_reports/pipeline_health.json (once per refresh)
 delta-crops-dashboard                    # http://localhost:8501
+```
+
+Both honour overrides, so a clone can read an existing lake without copying it:
+
+```bash
+python -m delta_crops.dashboard.health --root /path/to/data
+DELTA_CROPS_DATA=/path/to/data DELTA_CROPS_ARTIFACTS=/path/to/artifacts/phase7 \
+DELTA_CROPS_PREDICTIONS=/path/to/artifacts/phase8/predictions/temporal_2024.parquet \
+delta-crops-dashboard
 ```
 
 The dashboard reads `data/gold/**`, the health summary and `artifacts/phase7|8/**`; it never writes to
