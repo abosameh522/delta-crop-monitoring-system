@@ -157,7 +157,7 @@ Requires Python 3.10–3.13 (3.12 recommended) and [`uv`](https://docs.astral.sh
 are needed for the default path (Earth Search and Open-Meteo are open).
 
 ```bash
-git clone <this-repository> delta-crops
+git clone https://github.com/abosameh522/delta-crop-monitoring-system.git
 cd delta-crops
 uv venv --python 3.12 .venv
 source .venv/bin/activate

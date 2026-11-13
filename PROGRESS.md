@@ -23,7 +23,7 @@
     rebuild (`years=2019..2023`), so the five-year snapshot reproduces exactly; the **2024** anomaly
     is still uncovered (no snapshot for it). Recorded in [`docs/limitations.md`](docs/limitations.md) §4.
     The script and its thresholds were not edited.
-  - Fresh clone `/tmp/phase9-fresh` at commit `2cebf27`: `uv venv` + editable install
+  - Fresh clone at `/tmp/phase9-fresh` at commit `2cebf27`: `uv venv` + editable install
     `.[dev,dashboard]` OK; `pytest -q` → **231 passed, 9 skipped, 2 deselected in 32.14 s**
     (the 9 skips are the dashboard/README tests that need `data/` and `artifacts/`). Reused the
     existing lake via flags (`--data-dir`, `--root`, `DELTA_CROPS_*`); the **only rebuilt step**
@@ -188,6 +188,7 @@ Notes:
 - [x] Cloud filter 20 % vs 40 % compared per season; 40 % recommended.
 - [x] Weekly minimum-observation rule and null semantics.
 - [x] Leakage rule for Phase 7 added to risks.
+- [x] `.env.example` updated (Earth Search default, CDSE optional).
 - [x] `config/aoi.yaml` and `tests/test_config.py` updated for seasons, grid and thresholds.
 - [x] User review of `PROJECT.md` architecture (accepted 2026-11-10).
 - [x] Review follow-ups: 238k cell-count rationale, cross-era water sanity check, issue link + date,
