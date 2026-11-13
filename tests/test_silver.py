@@ -205,8 +205,14 @@ def _orbit_results(rows: list[dict], rule: dict) -> list[dict]:
     return results
 
 
+@pytest.mark.slow
 def test_cross_era_stable_target_runs_and_is_within_tolerance():
-    """Test 7 runs on real persisted measurements; missing data fails, never skips."""
+    """Test 7 runs on real persisted measurements; missing data fails, never skips.
+
+    It is marked slow because it needs the real-data report under ``data/``; the
+    default suite must run on a fresh clone. When selected it still fails rather
+    than skips if that report is missing.
+    """
     import json
     import re
     import pyarrow.parquet as pq

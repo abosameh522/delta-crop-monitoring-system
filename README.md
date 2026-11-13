@@ -165,8 +165,10 @@ uv pip install -e ".[dev,dashboard]"
 pytest -q
 ```
 
-Expected: the suite passes with no network and no data lake (tests that need the real lake skip with
-a reason). The prediction-dump and dashboard tests skip on a fresh clone — see
+Expected on a fresh clone: **231 passed, 9 skipped, 1 deselected** — no network and no data lake
+needed; tests that need the real lake skip with a reason. On a machine with the lake and artifacts
+the default suite is **240 passed, 2 deselected**; the two slow, data-dependent tests are
+`pytest -q -m slow`. The prediction-dump and dashboard tests skip on a fresh clone — see
 [Run the dashboard](#run-the-dashboard).
 
 ```bash
@@ -379,6 +381,13 @@ What is covered: Bronze/Silver/Gold rules, the quality gate and its refusal path
 split guards, the frozen-bars/reproduction gate, the dashboard loaders and all four pages
 (`AppTest`), input corruption, the health publisher, and the README itself (attributions, links,
 and the results table against the artifacts).
+
+The two `slow` tests are the ones that need real data or a full rebuild:
+`tests/test_silver.py::test_cross_era_stable_target_runs_and_is_within_tolerance` (reads the
+persisted 2021 audit report) and
+`tests/test_phase6a.py::test_gold_regression_except_is_identical_in_both_directions` (rebuilds Gold
+into a temp directory). They are excluded from the default run so a data-less clone is green, and
+they fail — not skip — if selected without their inputs.
 
 ## Licence
 
