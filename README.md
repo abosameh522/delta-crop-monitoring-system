@@ -125,6 +125,17 @@ in [`PROJECT.md`](PROJECT.md) §3. Two implementation details worth knowing:
 
 ## Design decisions and trade-offs
 
+Five choices shaped most of the rest. Each one was recorded before or at the moment it was made, and
+the full log with IDs and measured evidence is [PROJECT.md §6](PROJECT.md).
+
+| ID | Decision | Why it mattered |
+| --- | --- | --- |
+| D-007 | Earth Search as the primary imagery source; Copernicus Data Space as a documented fallback | Only Earth Search serves windowed COG reads without an account; CDSE delivers JP2 at roughly 1 GB per date, which would have made the six-season backfill impractical |
+| D-009 | Reflectance is `DN × 0.0001`; the advertised `raster:bands.offset` is ignored | Real pixels are already harmonised: applying the advertised −0.1 offset produced negative reflectance and NDVI above 1 ([upstream defect](https://github.com/Element84/earth-search/issues/71)) |
+| D-036 | The gap rule was revised after measuring it: information at >10 days, a cell-season alert at ≥13, never critical and never filled | 27.18 % of cells exceeded 10 days in 2020, so the original threshold would have flagged ordinary missingness; the revised rule still reports every gap |
+| D-049 | Verdict bars are derived per campaign from that campaign's own baseline, and frozen before any result is seen | Prevents a borrowed, easier bar from making a campaign look better or worse than it is; all three campaigns are reported against their own bar, including the misses |
+| D-050 | The S5 spatial holdout partition is a frozen hash of the 5 km block ids, drawn once and never redrawn | A holdout chosen after seeing scores is not a holdout; the partition is auditable in the artifact and the 28 held-out blocks contribute no training rows |
+
 | Decision | Why | What it costs |
 | --- | --- | --- |
 | DuckDB, not Spark | 84M rows fit on one laptop; no cluster to operate; Parquet scans answer the gold queries in ~1 s | No distributed scale; a bigger AOI or 10 m analysis would force a rethink |
@@ -141,7 +152,7 @@ in [`PROJECT.md`](PROJECT.md) §3. Two implementation details worth knowing:
 | 1 km display blocks | 239,304 polygons per week is unreadable and slow | Block edges are centroid envelopes, not true footprints |
 | Read-only dashboard enforced by a SQL guard | `duckdb.read_only` applies to a database file, not Parquet | A code-level guard plus an mtime test, not a database permission |
 
-The full log is [PROJECT.md §6](PROJECT.md) (D-001…D-058).
+The full log is [PROJECT.md §6](PROJECT.md) (D-001…D-062).
 
 ## Data sources and attribution
 
