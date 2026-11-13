@@ -18,6 +18,12 @@ by 0.0008 (S3), 0.0014 (S4) and 0.0140 (S5). P@R.5 and Brier pass. No heatwave e
 [Question and scope](PROJECT.md) · [Model card](docs/model-card.md) · [Limitations](docs/limitations.md) ·
 [Phase history](PROGRESS.md) · [Demo script](docs/demo-2min.md)
 
+> **TL;DR** — End-to-end Sentinel-2 + Open-Meteo pipeline for a 50 × 50 km Nile Delta AOI: six
+> seasons (2019–2024), 239,304 cells on a 100 m grid, Bronze → Silver → Gold Parquet, automated
+> quality gates, a time-split and spatially held-out XGBoost stress model, and a read-only dashboard.
+> Stress is predictable, but the headline model **misses the pre-registered PR-AUC bar by 0.0008**
+> and **weather adds no skill**. Try it with no data at all: `scripts/run_demo.sh`.
+
 ## Contents
 
 1. [Results](#results)
@@ -87,7 +93,7 @@ bottom is the same warning the page shows. No image is a mock-up.
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   S2[Sentinel-2 L2A<br/>Earth Search STAC, no auth] -->|B04, B08, SCL| B[Bronze<br/>COG + JSON]
   S2b[Copernicus Data Space<br/>fallback, needs account] -.->|only if needed| B
   OM[Open-Meteo<br/>daily weather] --> B
@@ -162,7 +168,7 @@ Requires Python 3.10–3.13 (3.12 recommended) and [`uv`](https://docs.astral.sh
 are needed for the default path (Earth Search and Open-Meteo are open).
 
 ```bash
-git clone https://github.com/abosameh522/delta-crop-monitoring-system.git
+git clone https://github.com/abosameh522/delta-crop-monitoring-system
 cd delta-crops
 uv venv --python 3.12 .venv
 source .venv/bin/activate
