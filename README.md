@@ -1,3 +1,5 @@
+[![CI](https://github.com/abosameh522/delta-crop-monitoring-system/actions/workflows/ci.yml/badge.svg)](https://github.com/abosameh522/delta-crop-monitoring-system/actions/workflows/ci.yml)
+
 # Nile Delta Crop Monitoring
 
 **How does crop health in a 50 × 50 km area of the central Nile Delta change over a growing season,

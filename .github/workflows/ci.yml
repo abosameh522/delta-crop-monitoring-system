@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Create virtual environment
+        run: uv venv --python 3.12 .venv
+
+      - name: Install project and test dependencies
+        run: uv pip install --python .venv/bin/python ".[dev,dashboard]"
+
+      - name: Run the default test suite
+        run: .venv/bin/python -m pytest -q
