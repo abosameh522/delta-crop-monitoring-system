@@ -28,3 +28,8 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# The committed demo subset is small and deliberately part of the repository,
+# even though it sits under silver/ and artifacts/-style paths.
+!demo_data/
+!demo_data/**

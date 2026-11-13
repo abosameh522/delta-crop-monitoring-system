@@ -12,11 +12,16 @@ Paths come from the environment so the same code runs from a fresh clone:
 | ``DELTA_CROPS_ARTIFACTS`` | ``artifacts/phase7`` | metric JSONs |
 
 Run it with ``delta-crops-dashboard`` from the repository root.
+
+A committed demo sample of about 5 x 5 km for 2024 lives in ``demo_data/``.
+``scripts/run_demo.sh`` points the three variables at it and the app then shows
+a "Demo sample" banner, so a subset is never mistaken for the full lake.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import streamlit as st
 
@@ -46,6 +51,9 @@ def main() -> None:
     st.sidebar.title("🌾 Nile Delta crops")
     st.sidebar.caption("Sentinel-2 NDVI · Open-Meteo weather · 2019–2024")
     page = st.sidebar.radio("Page", ("Map", "Season", "Predictions", "Pipeline Health"))
+
+    if (Path(root) / "DEMO_SAMPLE.json").is_file():
+        st.info("Demo sample: subset of cells, 2024 only")
 
     if page == "Map":
         map_view.render(root)

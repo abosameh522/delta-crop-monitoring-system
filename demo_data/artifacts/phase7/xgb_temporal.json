@@ -1,0 +1,764 @@
+{
+  "seed": 20260701,
+  "split": {
+    "name": "temporal",
+    "train_years": [
+      2019,
+      2020,
+      2021,
+      2022,
+      2023
+    ],
+    "test_year": 2024
+  },
+  "plan": {
+    "fit_years": [
+      2019,
+      2020,
+      2021,
+      2022
+    ],
+    "validation_year": 2023,
+    "final_years": [
+      2019,
+      2020,
+      2021,
+      2022,
+      2023
+    ]
+  },
+  "params": {
+    "objective": "binary:logistic",
+    "tree_method": "hist",
+    "max_depth": 6,
+    "eta": 0.05,
+    "seed": 20260701,
+    "eval_metric": "aucpr"
+  },
+  "variants": {
+    "full": {
+      "features": [
+        "ndvi_mean",
+        "ndvi_std",
+        "masked_pct_mean",
+        "n_obs",
+        "ndvi_lag1",
+        "ndvi_lag2",
+        "ndvi_lag3",
+        "ndvi_roll2",
+        "ndvi_roll3",
+        "ndvi_slope_2w",
+        "anomaly_t",
+        "baseline_mean",
+        "n_baseline_years",
+        "temp_max_mean_c",
+        "temp_max_max_c",
+        "temp_min_mean_c",
+        "solar_sum_mj_m2",
+        "precip_sum_mm",
+        "heatwave_days",
+        "temp_max_mean_c_lag1",
+        "temp_max_mean_c_lag2",
+        "heatwave_days_lag1",
+        "heatwave_days_2w",
+        "week_index",
+        "cropland_pct",
+        "is_cropland"
+      ],
+      "rounds": {
+        "best_iteration": 532,
+        "best_round": 533,
+        "best_validation_pr_auc": 0.7851080327597262,
+        "rounds_run": 583,
+        "final_validation_pr_auc": 0.7848950270693615
+      },
+      "groups": {
+        "cropland/pooled": {
+          "rows": 2449220,
+          "positives": 614324,
+          "prevalence_test": 0.2508243440768898,
+          "models": {
+            "M": {
+              "pr_auc": 0.8213704512861072,
+              "precision_at_recall_0_5": 0.8713148212761008,
+              "recall_at_precision_0_5": 0.9412476152649091,
+              "lift_over_prevalence": 3.2746839399062373,
+              "roc_auc": 0.9224629694790202,
+              "brier": 0.09368844433728399,
+              "rows": 2449220,
+              "positives": 614324
+            }
+          }
+        },
+        "all/pooled": {
+          "rows": 3026561,
+          "positives": 651140,
+          "prevalence_test": 0.21514187224377768,
+          "models": {
+            "M": {
+              "pr_auc": 0.815362074755916,
+              "precision_at_recall_0_5": 0.8669198078541225,
+              "recall_at_precision_0_5": 0.9318871517645975,
+              "lift_over_prevalence": 3.789880910918297,
+              "roc_auc": 0.9325818680555171,
+              "brier": 0.08189035188734343,
+              "rows": 3026561,
+              "positives": 651140
+            }
+          }
+        },
+        "cropland/complete": {
+          "rows": 1792072,
+          "positives": 423460,
+          "prevalence_test": 0.23629630952327807,
+          "models": {
+            "M": {
+              "pr_auc": 0.8499938551469249,
+              "precision_at_recall_0_5": 0.9081628713954216,
+              "recall_at_precision_0_5": 0.9564634203938979,
+              "lift_over_prevalence": 3.597152477166344,
+              "roc_auc": 0.939638797305045,
+              "brier": 0.08000055641282398,
+              "rows": 1792072,
+              "positives": 423460
+            }
+          }
+        },
+        "cropland/incomplete": {
+          "rows": 657148,
+          "positives": 190864,
+          "prevalence_test": 0.29044294435956586,
+          "models": {
+            "M": {
+              "pr_auc": 0.7458620253659065,
+              "precision_at_recall_0_5": 0.7732734801033927,
+              "recall_at_precision_0_5": 0.8875796378573225,
+              "lift_over_prevalence": 2.568015645931945,
+              "roc_auc": 0.8670973799748684,
+              "brier": 0.131015927170014,
+              "rows": 657148,
+              "positives": 190864
+            }
+          }
+        },
+        "cropland/onset": {
+          "rows": 1795668,
+          "positives": 177133,
+          "prevalence_test": 0.09864462695776725,
+          "models": {
+            "M": {
+              "pr_auc": 0.4373936800247182,
+              "precision_at_recall_0_5": 0.41368084261659543,
+              "recall_at_precision_0_5": 0.3390785454997093,
+              "lift_over_prevalence": 4.434034508660869,
+              "roc_auc": 0.8691459543475338,
+              "brier": 0.06981856843028336,
+              "rows": 1795668,
+              "positives": 177133
+            }
+          }
+        },
+        "all/onset": {
+          "rows": 2332737,
+          "positives": 190067,
+          "prevalence_test": 0.08147810919104898,
+          "models": {
+            "M": {
+              "pr_auc": 0.42528422991225845,
+              "precision_at_recall_0_5": 0.3995257854179016,
+              "recall_at_precision_0_5": 0.3179457770154735,
+              "lift_over_prevalence": 5.21961339229236,
+              "roc_auc": 0.8857416157271545,
+              "brier": 0.05846162753590744,
+              "rows": 2332737,
+              "positives": 190067
+            }
+          }
+        }
+      },
+      "reliability_cropland_pooled": [
+        {
+          "bin": "0.0-0.1",
+          "rows": 1204181,
+          "mean_probability": 0.023304788395762444,
+          "observed_rate": 0.022138698418261042
+        },
+        {
+          "bin": "0.1-0.2",
+          "rows": 247761,
+          "mean_probability": 0.1452985405921936,
+          "observed_rate": 0.13271257381105178
+        },
+        {
+          "bin": "0.2-0.3",
+          "rows": 168552,
+          "mean_probability": 0.24767203629016876,
+          "observed_rate": 0.21172694480041768
+        },
+        {
+          "bin": "0.3-0.4",
+          "rows": 139079,
+          "mean_probability": 0.34877750277519226,
+          "observed_rate": 0.29953479677018097
+        },
+        {
+          "bin": "0.4-0.5",
+          "rows": 115161,
+          "mean_probability": 0.44876229763031006,
+          "observed_rate": 0.3945693420515626
+        },
+        {
+          "bin": "0.5-0.6",
+          "rows": 102919,
+          "mean_probability": 0.549304187297821,
+          "observed_rate": 0.4988194599636607
+        },
+        {
+          "bin": "0.6-0.7",
+          "rows": 96936,
+          "mean_probability": 0.6497699618339539,
+          "observed_rate": 0.6053581744656268
+        },
+        {
+          "bin": "0.7-0.8",
+          "rows": 97846,
+          "mean_probability": 0.7501116394996643,
+          "observed_rate": 0.7146740796762259
+        },
+        {
+          "bin": "0.8-0.9",
+          "rows": 104292,
+          "mean_probability": 0.8504236936569214,
+          "observed_rate": 0.8297856019637172
+        },
+        {
+          "bin": "0.9-1.0",
+          "rows": 172493,
+          "mean_probability": 0.9608614444732666,
+          "observed_rate": 0.959528792472738
+        }
+      ],
+      "missingness_train": {
+        "ndvi_mean": 0.0,
+        "ndvi_std": 0.0,
+        "masked_pct_mean": 0.0,
+        "n_obs": 0.0,
+        "ndvi_lag1": 2.511,
+        "ndvi_lag2": 5.668,
+        "ndvi_lag3": 12.715,
+        "ndvi_roll2": 2.511,
+        "ndvi_roll3": 5.668,
+        "ndvi_slope_2w": 5.668,
+        "anomaly_t": 0.0,
+        "baseline_mean": 0.0,
+        "n_baseline_years": 0.0,
+        "temp_max_mean_c": 0.0,
+        "temp_max_max_c": 0.0,
+        "temp_min_mean_c": 0.0,
+        "solar_sum_mj_m2": 0.0,
+        "precip_sum_mm": 0.0,
+        "heatwave_days": 0.0,
+        "temp_max_mean_c_lag1": 0.0,
+        "temp_max_mean_c_lag2": 0.0,
+        "heatwave_days_lag1": 0.0,
+        "heatwave_days_2w": 0.0,
+        "week_index": 0.0,
+        "cropland_pct": 0.0,
+        "is_cropland": 0.0
+      },
+      "missingness_test": {
+        "ndvi_mean": 0.0,
+        "ndvi_std": 0.0,
+        "masked_pct_mean": 0.0,
+        "n_obs": 0.0,
+        "ndvi_lag1": 9.438,
+        "ndvi_lag2": 13.998,
+        "ndvi_lag3": 20.417,
+        "ndvi_roll2": 9.438,
+        "ndvi_roll3": 18.49,
+        "ndvi_slope_2w": 13.998,
+        "anomaly_t": 0.0,
+        "baseline_mean": 0.0,
+        "n_baseline_years": 0.0,
+        "temp_max_mean_c": 0.0,
+        "temp_max_max_c": 0.0,
+        "temp_min_mean_c": 0.0,
+        "solar_sum_mj_m2": 0.0,
+        "precip_sum_mm": 0.0,
+        "heatwave_days": 0.0,
+        "temp_max_mean_c_lag1": 0.0,
+        "temp_max_mean_c_lag2": 4.804,
+        "heatwave_days_lag1": 0.0,
+        "heatwave_days_2w": 0.0,
+        "week_index": 0.0,
+        "cropland_pct": 0.0,
+        "is_cropland": 0.0
+      },
+      "importance_gain_top15": [
+        {
+          "feature": "anomaly_t",
+          "gain": 17955.98046875
+        },
+        {
+          "feature": "ndvi_slope_2w",
+          "gain": 2105.0439453125
+        },
+        {
+          "feature": "cropland_pct",
+          "gain": 979.00439453125
+        },
+        {
+          "feature": "week_index",
+          "gain": 834.5794067382812
+        },
+        {
+          "feature": "heatwave_days",
+          "gain": 665.6242065429688
+        },
+        {
+          "feature": "heatwave_days_2w",
+          "gain": 638.6805419921875
+        },
+        {
+          "feature": "ndvi_std",
+          "gain": 517.0098266601562
+        },
+        {
+          "feature": "heatwave_days_lag1",
+          "gain": 435.2030029296875
+        },
+        {
+          "feature": "solar_sum_mj_m2",
+          "gain": 400.180908203125
+        },
+        {
+          "feature": "temp_min_mean_c",
+          "gain": 374.36822509765625
+        },
+        {
+          "feature": "ndvi_lag3",
+          "gain": 316.1451110839844
+        },
+        {
+          "feature": "ndvi_lag1",
+          "gain": 267.2579040527344
+        },
+        {
+          "feature": "temp_max_mean_c_lag1",
+          "gain": 264.80914306640625
+        },
+        {
+          "feature": "ndvi_mean",
+          "gain": 244.45977783203125
+        },
+        {
+          "feature": "temp_max_mean_c",
+          "gain": 230.04859924316406
+        }
+      ],
+      "seconds": 739.34
+    },
+    "ndvi_only": {
+      "features": [
+        "ndvi_mean",
+        "ndvi_std",
+        "masked_pct_mean",
+        "n_obs",
+        "ndvi_lag1",
+        "ndvi_lag2",
+        "ndvi_lag3",
+        "ndvi_roll2",
+        "ndvi_roll3",
+        "ndvi_slope_2w",
+        "anomaly_t",
+        "baseline_mean",
+        "n_baseline_years",
+        "week_index",
+        "cropland_pct",
+        "is_cropland"
+      ],
+      "rounds": {
+        "best_iteration": 274,
+        "best_round": 275,
+        "best_validation_pr_auc": 0.7832917076798321,
+        "rounds_run": 325,
+        "final_validation_pr_auc": 0.783233173373386
+      },
+      "groups": {
+        "cropland/pooled": {
+          "rows": 2449220,
+          "positives": 614324,
+          "prevalence_test": 0.2508243440768898,
+          "models": {
+            "M": {
+              "pr_auc": 0.8235560892334478,
+              "precision_at_recall_0_5": 0.8740271972182464,
+              "recall_at_precision_0_5": 0.944190687650165,
+              "lift_over_prevalence": 3.2833977589551195,
+              "roc_auc": 0.9239465766960712,
+              "brier": 0.09242629253251158,
+              "rows": 2449220,
+              "positives": 614324
+            }
+          }
+        },
+        "all/pooled": {
+          "rows": 3026561,
+          "positives": 651140,
+          "prevalence_test": 0.21514187224377768,
+          "models": {
+            "M": {
+              "pr_auc": 0.817371770824721,
+              "precision_at_recall_0_5": 0.8695779914529914,
+              "recall_at_precision_0_5": 0.9350185827932549,
+              "lift_over_prevalence": 3.7992221704687754,
+              "roc_auc": 0.9337115776396987,
+              "brier": 0.08090134296754482,
+              "rows": 3026561,
+              "positives": 651140
+            }
+          }
+        },
+        "cropland/complete": {
+          "rows": 1792072,
+          "positives": 423460,
+          "prevalence_test": 0.23629630952327807,
+          "models": {
+            "M": {
+              "pr_auc": 0.8512603729932698,
+              "precision_at_recall_0_5": 0.908100550272992,
+              "recall_at_precision_0_5": 0.958465970811883,
+              "lift_over_prevalence": 3.602512348629847,
+              "roc_auc": 0.9406964003230269,
+              "brier": 0.07946875379996225,
+              "rows": 1792072,
+              "positives": 423460
+            }
+          }
+        },
+        "cropland/incomplete": {
+          "rows": 657148,
+          "positives": 190864,
+          "prevalence_test": 0.29044294435956586,
+          "models": {
+            "M": {
+              "pr_auc": 0.7499431661658829,
+              "precision_at_recall_0_5": 0.7807384257933618,
+              "recall_at_precision_0_5": 0.88992161958253,
+              "lift_over_prevalence": 2.582067083156476,
+              "roc_auc": 0.8690848064285989,
+              "brier": 0.12776208043952364,
+              "rows": 657148,
+              "positives": 190864
+            }
+          }
+        },
+        "cropland/onset": {
+          "rows": 1795668,
+          "positives": 177133,
+          "prevalence_test": 0.09864462695776725,
+          "models": {
+            "M": {
+              "pr_auc": 0.450819946815306,
+              "precision_at_recall_0_5": 0.426158043391442,
+              "recall_at_precision_0_5": 0.3655784071855611,
+              "lift_over_prevalence": 4.570141939999587,
+              "roc_auc": 0.8727428604286048,
+              "brier": 0.0686814361769898,
+              "rows": 1795668,
+              "positives": 177133
+            }
+          }
+        },
+        "all/onset": {
+          "rows": 2332737,
+          "positives": 190067,
+          "prevalence_test": 0.08147810919104898,
+          "models": {
+            "M": {
+              "pr_auc": 0.43781208686788875,
+              "precision_at_recall_0_5": 0.4107731009621619,
+              "recall_at_precision_0_5": 0.3415479804489996,
+              "lift_over_prevalence": 5.373370727606256,
+              "roc_auc": 0.8883549055060901,
+              "brier": 0.05761090951369866,
+              "rows": 2332737,
+              "positives": 190067
+            }
+          }
+        }
+      },
+      "reliability_cropland_pooled": [
+        {
+          "bin": "0.0-0.1",
+          "rows": 1277987,
+          "mean_probability": 0.024642474949359894,
+          "observed_rate": 0.025818728985506113
+        },
+        {
+          "bin": "0.1-0.2",
+          "rows": 273652,
+          "mean_probability": 0.145219087600708,
+          "observed_rate": 0.16157016941224622
+        },
+        {
+          "bin": "0.2-0.3",
+          "rows": 172814,
+          "mean_probability": 0.24677841365337372,
+          "observed_rate": 0.26592174245142175
+        },
+        {
+          "bin": "0.3-0.4",
+          "rows": 124211,
+          "mean_probability": 0.34802886843681335,
+          "observed_rate": 0.37173036204522947
+        },
+        {
+          "bin": "0.4-0.5",
+          "rows": 105514,
+          "mean_probability": 0.4487954378128052,
+          "observed_rate": 0.477765983660936
+        },
+        {
+          "bin": "0.5-0.6",
+          "rows": 88619,
+          "mean_probability": 0.5491074323654175,
+          "observed_rate": 0.5779911757072411
+        },
+        {
+          "bin": "0.6-0.7",
+          "rows": 80884,
+          "mean_probability": 0.6495554447174072,
+          "observed_rate": 0.6733470154789575
+        },
+        {
+          "bin": "0.7-0.8",
+          "rows": 81749,
+          "mean_probability": 0.7499967217445374,
+          "observed_rate": 0.7667005100979829
+        },
+        {
+          "bin": "0.8-0.9",
+          "rows": 87615,
+          "mean_probability": 0.8519495725631714,
+          "observed_rate": 0.8629572561775951
+        },
+        {
+          "bin": "0.9-1.0",
+          "rows": 156175,
+          "mean_probability": 0.960156261920929,
+          "observed_rate": 0.9643412838162317
+        }
+      ],
+      "missingness_train": {
+        "ndvi_mean": 0.0,
+        "ndvi_std": 0.0,
+        "masked_pct_mean": 0.0,
+        "n_obs": 0.0,
+        "ndvi_lag1": 2.511,
+        "ndvi_lag2": 5.668,
+        "ndvi_lag3": 12.715,
+        "ndvi_roll2": 2.511,
+        "ndvi_roll3": 5.668,
+        "ndvi_slope_2w": 5.668,
+        "anomaly_t": 0.0,
+        "baseline_mean": 0.0,
+        "n_baseline_years": 0.0,
+        "week_index": 0.0,
+        "cropland_pct": 0.0,
+        "is_cropland": 0.0
+      },
+      "missingness_test": {
+        "ndvi_mean": 0.0,
+        "ndvi_std": 0.0,
+        "masked_pct_mean": 0.0,
+        "n_obs": 0.0,
+        "ndvi_lag1": 9.438,
+        "ndvi_lag2": 13.998,
+        "ndvi_lag3": 20.417,
+        "ndvi_roll2": 9.438,
+        "ndvi_roll3": 18.49,
+        "ndvi_slope_2w": 13.998,
+        "anomaly_t": 0.0,
+        "baseline_mean": 0.0,
+        "n_baseline_years": 0.0,
+        "week_index": 0.0,
+        "cropland_pct": 0.0,
+        "is_cropland": 0.0
+      },
+      "importance_gain_top15": [
+        {
+          "feature": "anomaly_t",
+          "gain": 25051.0234375
+        },
+        {
+          "feature": "ndvi_slope_2w",
+          "gain": 3510.85595703125
+        },
+        {
+          "feature": "cropland_pct",
+          "gain": 1635.7452392578125
+        },
+        {
+          "feature": "ndvi_std",
+          "gain": 866.180419921875
+        },
+        {
+          "feature": "week_index",
+          "gain": 715.7024536132812
+        },
+        {
+          "feature": "ndvi_lag3",
+          "gain": 494.1198425292969
+        },
+        {
+          "feature": "ndvi_lag1",
+          "gain": 448.8946228027344
+        },
+        {
+          "feature": "ndvi_mean",
+          "gain": 350.1055908203125
+        },
+        {
+          "feature": "ndvi_roll2",
+          "gain": 348.5237731933594
+        },
+        {
+          "feature": "masked_pct_mean",
+          "gain": 306.6379699707031
+        },
+        {
+          "feature": "baseline_mean",
+          "gain": 253.43495178222656
+        },
+        {
+          "feature": "ndvi_roll3",
+          "gain": 230.69900512695312
+        },
+        {
+          "feature": "n_baseline_years",
+          "gain": 206.1337890625
+        },
+        {
+          "feature": "ndvi_lag2",
+          "gain": 206.0532989501953
+        },
+        {
+          "feature": "n_obs",
+          "gain": 196.19503784179688
+        }
+      ],
+      "seconds": 387.29
+    }
+  },
+  "sanity": {
+    "b3_features": {
+      "features": [
+        "anomaly_t",
+        "anomaly_lag1",
+        "week_index"
+      ],
+      "rounds": 226,
+      "pr_auc": 0.7962003881983675,
+      "b3_pr_auc": 0.772200213544559,
+      "floor": 0.752200213544559,
+      "passed": true
+    },
+    "permuted_labels": {
+      "pr_auc": 0.214797701112835,
+      "prevalence": 0.21517789363861084,
+      "rounds": 43,
+      "absolute_gap": 0.00038019252577584095,
+      "passed": true
+    }
+  },
+  "week_index_test": [
+    {
+      "week_index": 2,
+      "rows": 145406,
+      "positive_rate": 0.3457766529579247
+    },
+    {
+      "week_index": 3,
+      "rows": 222040,
+      "positive_rate": 0.26932534678436315
+    },
+    {
+      "week_index": 4,
+      "rows": 221687,
+      "positive_rate": 0.1899028810891031
+    },
+    {
+      "week_index": 5,
+      "rows": 217498,
+      "positive_rate": 0.21220425015402442
+    },
+    {
+      "week_index": 6,
+      "rows": 216972,
+      "positive_rate": 0.24863115978098557
+    },
+    {
+      "week_index": 7,
+      "rows": 218492,
+      "positive_rate": 0.2522106072533548
+    },
+    {
+      "week_index": 8,
+      "rows": 222772,
+      "positive_rate": 0.21825004937783923
+    },
+    {
+      "week_index": 9,
+      "rows": 222541,
+      "positive_rate": 0.17248057661284888
+    },
+    {
+      "week_index": 10,
+      "rows": 180106,
+      "positive_rate": 0.1591007517795076
+    },
+    {
+      "week_index": 11,
+      "rows": 172287,
+      "positive_rate": 0.15344744525123777
+    },
+    {
+      "week_index": 12,
+      "rows": 173032,
+      "positive_rate": 0.1543818484442184
+    },
+    {
+      "week_index": 13,
+      "rows": 215662,
+      "positive_rate": 0.17584460869323293
+    },
+    {
+      "week_index": 14,
+      "rows": 220595,
+      "positive_rate": 0.20931571431809423
+    },
+    {
+      "week_index": 15,
+      "rows": 83554,
+      "positive_rate": 0.21195873327428968
+    },
+    {
+      "week_index": 16,
+      "rows": 79789,
+      "positive_rate": 0.22050658612089385
+    },
+    {
+      "week_index": 17,
+      "rows": 75900,
+      "positive_rate": 0.23795783926218708
+    },
+    {
+      "week_index": 18,
+      "rows": 138228,
+      "positive_rate": 0.2711823943050612
+    }
+  ],
+  "seconds": 1513.12,
+  "peak_rss_mb": 9402.8
+}

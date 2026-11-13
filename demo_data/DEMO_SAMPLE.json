@@ -1,0 +1,15 @@
+{
+  "kind": "demo-sample",
+  "summary": "50 x 50 cells of the 100 m grid (~5 x 5 km), season 2024 only",
+  "source": "a spatial and temporal subset of the local lake and the frozen Phase 7/8 outputs",
+  "cell_window": {
+    "row0": 20,
+    "row1": 69,
+    "col0": 400,
+    "col1": 449
+  },
+  "n_cells": 2500,
+  "n_cropland_cells": 2407,
+  "year": 2024,
+  "attribution": "demo_data/README.md"
+}

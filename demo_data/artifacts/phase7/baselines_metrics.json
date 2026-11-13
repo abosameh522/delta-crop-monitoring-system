@@ -1,0 +1,3711 @@
+{
+  "seed": 20260701,
+  "rule": "docs/phase7-preregistration.md",
+  "onset": false,
+  "reports": [
+    {
+      "split": {
+        "name": "temporal",
+        "train_years": [
+          2019,
+          2020,
+          2021,
+          2022,
+          2023
+        ],
+        "test_year": 2024
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2519921,
+          "positives": 407626.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2728392,
+          "positives": 502313.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2681558,
+          "positives": 609530.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2589333,
+          "positives": 545571.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1431931,
+          "positives": 217794.0
+        },
+        {
+          "year": 2024,
+          "split": "test",
+          "rows": 3026561,
+          "positives": 651140.0
+        }
+      ],
+      "rows_train": 11951135,
+      "rows_test": 3026561,
+      "positive_rate_train": 0.19101399155812399,
+      "positive_rate_test": 0.21514187224377768,
+      "week_index_test": [
+        {
+          "week_index": 2,
+          "rows": 145406,
+          "positive_rate": 0.3457766529579247
+        },
+        {
+          "week_index": 3,
+          "rows": 222040,
+          "positive_rate": 0.26932534678436315
+        },
+        {
+          "week_index": 4,
+          "rows": 221687,
+          "positive_rate": 0.1899028810891031
+        },
+        {
+          "week_index": 5,
+          "rows": 217498,
+          "positive_rate": 0.21220425015402442
+        },
+        {
+          "week_index": 6,
+          "rows": 216972,
+          "positive_rate": 0.24863115978098557
+        },
+        {
+          "week_index": 7,
+          "rows": 218492,
+          "positive_rate": 0.2522106072533548
+        },
+        {
+          "week_index": 8,
+          "rows": 222772,
+          "positive_rate": 0.21825004937783923
+        },
+        {
+          "week_index": 9,
+          "rows": 222541,
+          "positive_rate": 0.17248057661284888
+        },
+        {
+          "week_index": 10,
+          "rows": 180106,
+          "positive_rate": 0.1591007517795076
+        },
+        {
+          "week_index": 11,
+          "rows": 172287,
+          "positive_rate": 0.15344744525123777
+        },
+        {
+          "week_index": 12,
+          "rows": 173032,
+          "positive_rate": 0.1543818484442184
+        },
+        {
+          "week_index": 13,
+          "rows": 215662,
+          "positive_rate": 0.17584460869323293
+        },
+        {
+          "week_index": 14,
+          "rows": 220595,
+          "positive_rate": 0.20931571431809423
+        },
+        {
+          "week_index": 15,
+          "rows": 83554,
+          "positive_rate": 0.21195873327428968
+        },
+        {
+          "week_index": 16,
+          "rows": 79789,
+          "positive_rate": 0.22050658612089385
+        },
+        {
+          "week_index": 17,
+          "rows": 75900,
+          "positive_rate": 0.23795783926218708
+        },
+        {
+          "week_index": 18,
+          "rows": 138228,
+          "positive_rate": 0.2711823943050612
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 11951135,
+          "rows_test": 3026561,
+          "positives_train": 2282834,
+          "positives_test": 651140,
+          "prevalence_train": 0.19101399155812399,
+          "prevalence_test": 0.21514187224377768,
+          "models": {
+            "B0": {
+              "pr_auc": 0.21514187224377768,
+              "precision_at_recall_0_5": 0.21514187224377768,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.16943800167760087,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B1": {
+              "pr_auc": 0.7468773403483555,
+              "precision_at_recall_0_5": 0.7896338875347134,
+              "recall_at_precision_0_5": 0.8739687317627546,
+              "lift_over_prevalence": 3.471557314989187,
+              "roc_auc": 0.8946536900959859,
+              "brier": null,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B2": {
+              "pr_auc": 0.2393068485628415,
+              "precision_at_recall_0_5": 0.24610974610974612,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1123211212538044,
+              "roc_auc": 0.5490378459887979,
+              "brier": 0.16874060759195023,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B3": {
+              "pr_auc": 0.7578578953939352,
+              "precision_at_recall_0_5": 0.8073291210807702,
+              "recall_at_precision_0_5": 0.8840249408729306,
+              "lift_over_prevalence": 3.522595985105145,
+              "roc_auc": 0.9007011293931075,
+              "brier": 0.09371594779846325,
+              "rows": 3026561,
+              "positives": 651140,
+              "coefficients": [
+                -2.441659216000714,
+                -3.3261391814137453,
+                0.846319622948046,
+                0.16733568042429078
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.21544350016307154,
+            "prevalence_test": 0.21514187224377768
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1532823147911707,
+            "prevalence_test": 0.21514187224377768,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 10235580,
+          "rows_test": 2218117,
+          "positives_train": 1953714,
+          "positives_test": 449023,
+          "prevalence_train": 0.19087477211843393,
+          "prevalence_test": 0.20243431703557568,
+          "models": {
+            "B0": {
+              "pr_auc": 0.20243431703557568,
+              "precision_at_recall_0_5": 0.20243431703557568,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1615882874006071,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B1": {
+              "pr_auc": 0.7711140549705557,
+              "precision_at_recall_0_5": 0.8228042013911794,
+              "recall_at_precision_0_5": 0.8867274059457979,
+              "lift_over_prevalence": 3.809206197163896,
+              "roc_auc": 0.9088338835317646,
+              "brier": null,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B2": {
+              "pr_auc": 0.22872417698314995,
+              "precision_at_recall_0_5": 0.23325567904194247,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1298685930950834,
+              "roc_auc": 0.5509752694257862,
+              "brier": 0.1609385724007529,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B3": {
+              "pr_auc": 0.787517349071235,
+              "precision_at_recall_0_5": 0.8459095207773663,
+              "recall_at_precision_0_5": 0.8979205964950571,
+              "lift_over_prevalence": 3.8902364016316326,
+              "roc_auc": 0.9170718757848811,
+              "brier": 0.08323172285305042,
+              "rows": 2218117,
+              "positives": 449023,
+              "coefficients": [
+                -2.513675637534047,
+                -3.6464960804327853,
+                0.9915863477025402,
+                0.1755996977401074
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.20244670043592136,
+            "prevalence_test": 0.20243431703557568
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.25473648011267974,
+            "prevalence_test": 0.20243431703557568,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 1715555,
+          "rows_test": 808444,
+          "positives_train": 329120,
+          "positives_test": 202117,
+          "prevalence_train": 0.19184462171134123,
+          "prevalence_test": 0.250007421664333,
+          "models": {
+            "B0": {
+              "pr_auc": 0.250007421664333,
+              "precision_at_recall_0_5": 0.250007421664333,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1908866220754571,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B1": {
+              "pr_auc": 0.7010730130200215,
+              "precision_at_recall_0_5": 0.7291571967647207,
+              "recall_at_precision_0_5": 0.8344523221698323,
+              "lift_over_prevalence": 2.8042088044942197,
+              "roc_auc": 0.8556045510899781,
+              "brier": null,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B2": {
+              "pr_auc": 0.2679758559089213,
+              "precision_at_recall_0_5": 0.2813200270988587,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0718716033506928,
+              "roc_auc": 0.5517633148591436,
+              "brier": 0.19271735574680224,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B3": {
+              "pr_auc": 0.7041800218919008,
+              "precision_at_recall_0_5": 0.7382281181059798,
+              "recall_at_precision_0_5": 0.828055037428816,
+              "lift_over_prevalence": 2.8166364710458587,
+              "roc_auc": 0.8522754086766364,
+              "brier": 0.12261009560511461,
+              "rows": 808444,
+              "positives": 202117,
+              "coefficients": [
+                -2.1577987233278026,
+                -2.2659957857267066,
+                0.5933551761735374,
+                0.08886457206875807
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.24943053450347208,
+            "prevalence_test": 0.250007421664333
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.16893600790265742,
+            "prevalence_test": 0.250007421664333,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 9621859,
+          "rows_test": 2449220,
+          "positives_train": 2189031,
+          "positives_test": 614324,
+          "prevalence_train": 0.22750603599574676,
+          "prevalence_test": 0.2508243440768898,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2508243440768898,
+              "precision_at_recall_0_5": 0.2508243440768898,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.18845523598705483,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B1": {
+              "pr_auc": 0.7589650408587866,
+              "precision_at_recall_0_5": 0.7948278048187222,
+              "recall_at_precision_0_5": 0.8933722270332919,
+              "lift_over_prevalence": 3.0258826895451865,
+              "roc_auc": 0.8905215356614354,
+              "brier": null,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B2": {
+              "pr_auc": 0.28198290434790957,
+              "precision_at_recall_0_5": 0.28872011346333015,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1242246257463278,
+              "roc_auc": 0.5571178828578381,
+              "brier": 0.18731576676680792,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B3": {
+              "pr_auc": 0.772200213544559,
+              "precision_at_recall_0_5": 0.8145372580217449,
+              "recall_at_precision_0_5": 0.9058151724497171,
+              "lift_over_prevalence": 3.078649388624903,
+              "roc_auc": 0.8980513236006565,
+              "brier": 0.10504816355665662,
+              "rows": 2449220,
+              "positives": 614324,
+              "coefficients": [
+                -2.1362516988419236,
+                -3.396148673415285,
+                0.9210539874450205,
+                0.19031543344729596
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.25056554654332475,
+            "prevalence_test": 0.2508243440768898
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.572890537012549,
+            "prevalence_test": 0.2508243440768898,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 8235912,
+          "rows_test": 1792072,
+          "positives_train": 1872398,
+          "positives_test": 423460,
+          "prevalence_train": 0.22734555687336144,
+          "prevalence_test": 0.23629630952327807,
+          "models": {
+            "B0": {
+              "pr_auc": 0.23629630952327807,
+              "precision_at_recall_0_5": 0.23629630952327807,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.18054047960195727,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B1": {
+              "pr_auc": 0.785007948677131,
+              "precision_at_recall_0_5": 0.8292860611947548,
+              "recall_at_precision_0_5": 0.9070136494592169,
+              "lift_over_prevalence": 3.322133766121295,
+              "roc_auc": 0.9074263058290588,
+              "brier": null,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B2": {
+              "pr_auc": 0.2695665334302299,
+              "precision_at_recall_0_5": 0.27447038478166885,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1407987453298516,
+              "roc_auc": 0.5562952466106643,
+              "brier": 0.1794272944485304,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B3": {
+              "pr_auc": 0.8053226397664436,
+              "precision_at_recall_0_5": 0.8555335113927017,
+              "recall_at_precision_0_5": 0.9218910877060407,
+              "lift_over_prevalence": 3.408105024539579,
+              "roc_auc": 0.9175263879407797,
+              "brier": 0.09251483170535355,
+              "rows": 1792072,
+              "positives": 423460,
+              "coefficients": [
+                -2.2064124860074177,
+                -3.7630212178812816,
+                1.0985817632839672,
+                0.1987364467070045
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.23625436465513053,
+            "prevalence_test": 0.23629630952327807
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.3470452017642086,
+            "prevalence_test": 0.23629630952327807,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1385947,
+          "rows_test": 657148,
+          "positives_train": 316633,
+          "positives_test": 190864,
+          "prevalence_train": 0.22845967414338356,
+          "prevalence_test": 0.29044294435956586,
+          "models": {
+            "B0": {
+              "pr_auc": 0.29044294435956586,
+              "precision_at_recall_0_5": 0.29044294435956586,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.20992776621800427,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B1": {
+              "pr_auc": 0.7095867314347691,
+              "precision_at_recall_0_5": 0.7307309453437265,
+              "recall_at_precision_0_5": 0.850825718836449,
+              "lift_over_prevalence": 2.443119191617569,
+              "roc_auc": 0.8434953499449486,
+              "brier": null,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B2": {
+              "pr_auc": 0.3115725657088274,
+              "precision_at_recall_0_5": 0.3283909267301118,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0727496458757257,
+              "roc_auc": 0.555720746871206,
+              "brier": 0.21218639738242367,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B3": {
+              "pr_auc": 0.7118404203771553,
+              "precision_at_recall_0_5": 0.7372739282596436,
+              "recall_at_precision_0_5": 0.8423851538268086,
+              "lift_over_prevalence": 2.4508786809980245,
+              "roc_auc": 0.8395544664836038,
+              "brier": 0.1391233692033581,
+              "rows": 657148,
+              "positives": 190864,
+              "coefficients": [
+                -1.8736577040184192,
+                -2.237870825689686,
+                0.6265502711838824,
+                0.08307490623826752
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2904021958745425,
+            "prevalence_test": 0.29044294435956586
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.19035812574466573,
+            "prevalence_test": 0.29044294435956586,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 79.7
+    },
+    {
+      "split": {
+        "name": "loso-2019",
+        "train_years": [
+          2020,
+          2021,
+          2022,
+          2023,
+          2024
+        ],
+        "test_year": 2019
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "test",
+          "rows": 2770272,
+          "positives": 460310.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2740513,
+          "positives": 478795.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2707264,
+          "positives": 565812.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2649480,
+          "positives": 531760.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1427934,
+          "positives": 210376.0
+        },
+        {
+          "year": 2024,
+          "split": "train",
+          "rows": 2683704,
+          "positives": 537659.0
+        }
+      ],
+      "rows_train": 12208895,
+      "rows_test": 2770272,
+      "positive_rate_train": 0.19038594401868475,
+      "positive_rate_test": 0.1661605791777847,
+      "week_index_test": [
+        {
+          "week_index": 4,
+          "rows": 197203,
+          "positive_rate": 0.12301536994873304
+        },
+        {
+          "week_index": 5,
+          "rows": 205494,
+          "positive_rate": 0.15246187236610315
+        },
+        {
+          "week_index": 6,
+          "rows": 154976,
+          "positive_rate": 0.18679666529010944
+        },
+        {
+          "week_index": 7,
+          "rows": 169096,
+          "positive_rate": 0.1986504707385154
+        },
+        {
+          "week_index": 8,
+          "rows": 168752,
+          "positive_rate": 0.18249265193894
+        },
+        {
+          "week_index": 9,
+          "rows": 211540,
+          "positive_rate": 0.17932778670700578
+        },
+        {
+          "week_index": 10,
+          "rows": 211466,
+          "positive_rate": 0.15098881144013696
+        },
+        {
+          "week_index": 11,
+          "rows": 165273,
+          "positive_rate": 0.12184083304593006
+        },
+        {
+          "week_index": 12,
+          "rows": 172515,
+          "positive_rate": 0.10980494449757992
+        },
+        {
+          "week_index": 13,
+          "rows": 172804,
+          "positive_rate": 0.1040890257169973
+        },
+        {
+          "week_index": 14,
+          "rows": 218519,
+          "positive_rate": 0.14170392505914817
+        },
+        {
+          "week_index": 15,
+          "rows": 212530,
+          "positive_rate": 0.18600668140968335
+        },
+        {
+          "week_index": 16,
+          "rows": 200735,
+          "positive_rate": 0.21370463546466734
+        },
+        {
+          "week_index": 17,
+          "rows": 153480,
+          "positive_rate": 0.23181522022413345
+        },
+        {
+          "week_index": 18,
+          "rows": 155889,
+          "positive_rate": 0.2275978420542822
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 12208895,
+          "rows_test": 2770272,
+          "positives_train": 2324402,
+          "positives_test": 460310,
+          "prevalence_train": 0.19038594401868475,
+          "prevalence_test": 0.1661605791777847,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1661605791777847,
+              "precision_at_recall_0_5": 0.1661605791777847,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.13913810940676255,
+              "rows": 2770272,
+              "positives": 460310
+            },
+            "B1": {
+              "pr_auc": 0.7249369896338178,
+              "precision_at_recall_0_5": 0.7855092644735001,
+              "recall_at_precision_0_5": 0.8119115378766484,
+              "lift_over_prevalence": 4.362869901038117,
+              "roc_auc": 0.8921154926389545,
+              "brier": null,
+              "rows": 2770272,
+              "positives": 460310
+            },
+            "B2": {
+              "pr_auc": 0.1995650480794311,
+              "precision_at_recall_0_5": 0.19521745144144323,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2010372680869452,
+              "roc_auc": 0.5693774155018333,
+              "brier": 0.1384036413089475,
+              "rows": 2770272,
+              "positives": 460310
+            },
+            "B3": {
+              "pr_auc": 0.7346730619017905,
+              "precision_at_recall_0_5": 0.7961554294095468,
+              "recall_at_precision_0_5": 0.8332058829918968,
+              "lift_over_prevalence": 4.421464257871428,
+              "roc_auc": 0.9019401165877132,
+              "brier": 0.0767023507792884,
+              "rows": 2770272,
+              "positives": 460310,
+              "coefficients": [
+                -2.486254640798831,
+                -3.454496485163424,
+                0.94033858538014,
+                0.16698340633600336
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.1658655339367918,
+            "prevalence_test": 0.1661605791777847
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.43885685453276,
+            "prevalence_test": 0.1661605791777847,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 9966970,
+          "rows_test": 1844895,
+          "positives_train": 1914964,
+          "positives_test": 309558,
+          "prevalence_train": 0.19213100872180813,
+          "prevalence_test": 0.1677916629401673,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1677916629401673,
+              "precision_at_recall_0_5": 0.1677916629401673,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.14023002454101885,
+              "rows": 1844895,
+              "positives": 309558
+            },
+            "B1": {
+              "pr_auc": 0.7711924978294391,
+              "precision_at_recall_0_5": 0.8395430703890736,
+              "recall_at_precision_0_5": 0.8616769716822049,
+              "lift_over_prevalence": 4.596131204113747,
+              "roc_auc": 0.9153558913313978,
+              "brier": null,
+              "rows": 1844895,
+              "positives": 309558
+            },
+            "B2": {
+              "pr_auc": 0.20286894350914456,
+              "precision_at_recall_0_5": 0.20834688318682149,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2090525831517946,
+              "roc_auc": 0.5755130434851957,
+              "brier": 0.13947451446470407,
+              "rows": 1844895,
+              "positives": 309558
+            },
+            "B3": {
+              "pr_auc": 0.7768661383811581,
+              "precision_at_recall_0_5": 0.8463881445835839,
+              "recall_at_precision_0_5": 0.8719141485602052,
+              "lift_over_prevalence": 4.629944806364904,
+              "roc_auc": 0.9200122098286021,
+              "brier": 0.07026972346449796,
+              "rows": 1844895,
+              "positives": 309558,
+              "coefficients": [
+                -2.5354158322218847,
+                -3.752862634501672,
+                1.0362715772042232,
+                0.11379898520915456
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.16736277318504278,
+            "prevalence_test": 0.1677916629401673
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.10784638785599378,
+            "prevalence_test": 0.1677916629401673,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 2241925,
+          "rows_test": 925377,
+          "positives_train": 409438,
+          "positives_test": 150752,
+          "prevalence_train": 0.1826278755979794,
+          "prevalence_test": 0.1629087388167201,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1629087388167201,
+              "precision_at_recall_0_5": 0.1629087388167201,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1367583259892638,
+              "rows": 925377,
+              "positives": 150752
+            },
+            "B1": {
+              "pr_auc": 0.6241767994383556,
+              "precision_at_recall_0_5": 0.6545612435413138,
+              "recall_at_precision_0_5": 0.690577902780726,
+              "lift_over_prevalence": 3.831450688109393,
+              "roc_auc": 0.8436177667794624,
+              "brier": null,
+              "rows": 925377,
+              "positives": 150752
+            },
+            "B2": {
+              "pr_auc": 0.18075831920048194,
+              "precision_at_recall_0_5": 0.17089547738019983,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1095679735378925,
+              "roc_auc": 0.5386273625733612,
+              "brier": 0.1392679391679928,
+              "rows": 925377,
+              "positives": 150752
+            },
+            "B3": {
+              "pr_auc": 0.6514594069809483,
+              "precision_at_recall_0_5": 0.685074436951266,
+              "recall_at_precision_0_5": 0.7600496179155168,
+              "lift_over_prevalence": 3.9989224133265826,
+              "roc_auc": 0.8764102004484335,
+              "brier": 0.08815298800320094,
+              "rows": 925377,
+              "positives": 150752,
+              "coefficients": [
+                -2.353062995263724,
+                -2.663169564857601,
+                0.9027810568185407,
+                0.13100026196271516
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.1632862817396897,
+            "prevalence_test": 0.1629087388167201
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.2513511632100785,
+            "prevalence_test": 0.1629087388167201,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 9827845,
+          "rows_test": 2250293,
+          "positives_train": 2225992,
+          "positives_test": 445969,
+          "prevalence_train": 0.22649848466271089,
+          "prevalence_test": 0.19818263666109256,
+          "models": {
+            "B0": {
+              "pr_auc": 0.19818263666109256,
+              "precision_at_recall_0_5": 0.19818263666109256,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1597080664352007,
+              "rows": 2250293,
+              "positives": 445969
+            },
+            "B1": {
+              "pr_auc": 0.7386507800251779,
+              "precision_at_recall_0_5": 0.7908026655034347,
+              "recall_at_precision_0_5": 0.8293850020965583,
+              "lift_over_prevalence": 3.7271215706365193,
+              "roc_auc": 0.890974434971361,
+              "brier": null,
+              "rows": 2250293,
+              "positives": 445969
+            },
+            "B2": {
+              "pr_auc": 0.2374594883287054,
+              "precision_at_recall_0_5": 0.23271683629992707,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1981851302885795,
+              "roc_auc": 0.5720005574256968,
+              "brier": 0.15871144929691974,
+              "rows": 2250293,
+              "positives": 445969
+            },
+            "B3": {
+              "pr_auc": 0.7498791498015981,
+              "precision_at_recall_0_5": 0.8028205017425617,
+              "recall_at_precision_0_5": 0.8538777358964412,
+              "lift_over_prevalence": 3.7837782483636477,
+              "roc_auc": 0.9012030812031444,
+              "brier": 0.08850170131067077,
+              "rows": 2250293,
+              "positives": 445969,
+              "coefficients": [
+                -2.1859899693346105,
+                -3.5406006969124517,
+                1.025386513018441,
+                0.19291626588681118
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.19825359785382485,
+            "prevalence_test": 0.19818263666109256
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1181106198865456,
+            "prevalence_test": 0.19818263666109256,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 8008605,
+          "rows_test": 1500077,
+          "positives_train": 1831882,
+          "positives_test": 299648,
+          "prevalence_train": 0.22873921238467873,
+          "prevalence_test": 0.19975507923926572,
+          "models": {
+            "B0": {
+              "pr_auc": 0.19975507923926572,
+              "precision_at_recall_0_5": 0.19975507923926572,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1606930675315714,
+              "rows": 1500077,
+              "positives": 299648
+            },
+            "B1": {
+              "pr_auc": 0.7839756143726518,
+              "precision_at_recall_0_5": 0.8450929848212221,
+              "recall_at_precision_0_5": 0.8788044639043144,
+              "lift_over_prevalence": 3.924684255130301,
+              "roc_auc": 0.9142801731568794,
+              "brier": null,
+              "rows": 1500077,
+              "positives": 299648
+            },
+            "B2": {
+              "pr_auc": 0.24159571426882653,
+              "precision_at_recall_0_5": 0.24742286128988525,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2094596802689772,
+              "roc_auc": 0.577979065187245,
+              "brier": 0.1597275180424944,
+              "rows": 1500077,
+              "positives": 299648
+            },
+            "B3": {
+              "pr_auc": 0.791485186534115,
+              "precision_at_recall_0_5": 0.8527068251149661,
+              "recall_at_precision_0_5": 0.8921935070482699,
+              "lift_over_prevalence": 3.9622781535686395,
+              "roc_auc": 0.9197031232745416,
+              "brier": 0.0807827517687516,
+              "rows": 1500077,
+              "positives": 299648,
+              "coefficients": [
+                -2.232637428004829,
+                -3.889389865245368,
+                1.154731761058008,
+                0.13628486293239112
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.19959897116446818,
+            "prevalence_test": 0.19975507923926572
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.11497995297291583,
+            "prevalence_test": 0.19975507923926572,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1819240,
+          "rows_test": 750216,
+          "positives_train": 394110,
+          "positives_test": 146321,
+          "prevalence_train": 0.21663441876827685,
+          "prevalence_test": 0.19503849557993963,
+          "models": {
+            "B0": {
+              "pr_auc": 0.19503849557993963,
+              "precision_at_recall_0_5": 0.19503849557993963,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1574648647202101,
+              "rows": 750216,
+              "positives": 146321
+            },
+            "B1": {
+              "pr_auc": 0.6396155609630196,
+              "precision_at_recall_0_5": 0.658064690220911,
+              "recall_at_precision_0_5": 0.7044648410002665,
+              "lift_over_prevalence": 3.2794323964668965,
+              "roc_auc": 0.8421982527213067,
+              "brier": null,
+              "rows": 750216,
+              "positives": 146321
+            },
+            "B2": {
+              "pr_auc": 0.2136056373890244,
+              "precision_at_recall_0_5": 0.210147435646936,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0951973186312582,
+              "roc_auc": 0.5413923802907528,
+              "brier": 0.2048021474461468,
+              "rows": 750216,
+              "positives": 146321
+            },
+            "B3": {
+              "pr_auc": 0.6695057189720293,
+              "precision_at_recall_0_5": 0.6967913368953399,
+              "recall_at_precision_0_5": 0.784890753890419,
+              "lift_over_prevalence": 3.43268500395924,
+              "roc_auc": 0.87335015176527,
+              "brier": 0.10160196266879919,
+              "rows": 750216,
+              "positives": 146321,
+              "coefficients": [
+                -2.076236950490406,
+                -2.664108626575545,
+                0.9484733608175347,
+                0.1512258151395405
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.19587398168336684,
+            "prevalence_test": 0.19503849557993963
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.45985725054347937,
+            "prevalence_test": 0.19503849557993963,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 80.45
+    },
+    {
+      "split": {
+        "name": "loso-2020",
+        "train_years": [
+          2019,
+          2021,
+          2022,
+          2023,
+          2024
+        ],
+        "test_year": 2020
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2511577,
+          "positives": 401210.0
+        },
+        {
+          "year": 2020,
+          "split": "test",
+          "rows": 2993532,
+          "positives": 551464.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2811782,
+          "positives": 578214.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2572001,
+          "positives": 528541.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1445492,
+          "positives": 227504.0
+        },
+        {
+          "year": 2024,
+          "split": "train",
+          "rows": 2791115,
+          "positives": 591152.0
+        }
+      ],
+      "rows_train": 12131967,
+      "rows_test": 2993532,
+      "positive_rate_train": 0.19177607390458612,
+      "positive_rate_test": 0.18421850843752463,
+      "week_index_test": [
+        {
+          "week_index": 3,
+          "rows": 220324,
+          "positive_rate": 0.13730233655888602
+        },
+        {
+          "week_index": 4,
+          "rows": 128868,
+          "positive_rate": 0.12471676444113357
+        },
+        {
+          "week_index": 5,
+          "rows": 128877,
+          "positive_rate": 0.1732659822931943
+        },
+        {
+          "week_index": 6,
+          "rows": 128853,
+          "positive_rate": 0.20495448301552932
+        },
+        {
+          "week_index": 7,
+          "rows": 223677,
+          "positive_rate": 0.19659598438820264
+        },
+        {
+          "week_index": 8,
+          "rows": 221766,
+          "positive_rate": 0.18014934660858742
+        },
+        {
+          "week_index": 9,
+          "rows": 201257,
+          "positive_rate": 0.17135801487650118
+        },
+        {
+          "week_index": 10,
+          "rows": 201247,
+          "positive_rate": 0.15197742078142779
+        },
+        {
+          "week_index": 11,
+          "rows": 202919,
+          "positive_rate": 0.14620612165445326
+        },
+        {
+          "week_index": 12,
+          "rows": 224418,
+          "positive_rate": 0.1504825816111007
+        },
+        {
+          "week_index": 13,
+          "rows": 224939,
+          "positive_rate": 0.16680077709956923
+        },
+        {
+          "week_index": 14,
+          "rows": 165022,
+          "positive_rate": 0.17367381318854455
+        },
+        {
+          "week_index": 15,
+          "rows": 160040,
+          "positive_rate": 0.18027993001749562
+        },
+        {
+          "week_index": 16,
+          "rows": 158709,
+          "positive_rate": 0.21914321179013163
+        },
+        {
+          "week_index": 17,
+          "rows": 198382,
+          "positive_rate": 0.28026736296639815
+        },
+        {
+          "week_index": 18,
+          "rows": 204234,
+          "positive_rate": 0.28670054936984046
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 12131967,
+          "rows_test": 2993532,
+          "positives_train": 2326621,
+          "positives_test": 551464,
+          "prevalence_train": 0.19177607390458612,
+          "prevalence_test": 0.18421850843752463,
+          "models": {
+            "B0": {
+              "pr_auc": 0.18421850843752463,
+              "precision_at_recall_0_5": 0.18421850843752463,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1503391663823672,
+              "rows": 2993532,
+              "positives": 551464
+            },
+            "B1": {
+              "pr_auc": 0.7642352136129363,
+              "precision_at_recall_0_5": 0.8335383936371853,
+              "recall_at_precision_0_5": 0.8579036890894056,
+              "lift_over_prevalence": 4.148525683412083,
+              "roc_auc": 0.9015314806787758,
+              "brier": null,
+              "rows": 2993532,
+              "positives": 551464
+            },
+            "B2": {
+              "pr_auc": 0.22972059289158658,
+              "precision_at_recall_0_5": 0.22344434695786725,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.247000612696272,
+              "roc_auc": 0.5735285187728867,
+              "brier": 0.14895235574816829,
+              "rows": 2993532,
+              "positives": 551464
+            },
+            "B3": {
+              "pr_auc": 0.7745063181299906,
+              "precision_at_recall_0_5": 0.8409693967804706,
+              "recall_at_precision_0_5": 0.8729092016885962,
+              "lift_over_prevalence": 4.204280691984077,
+              "roc_auc": 0.9094604989661226,
+              "brier": 0.07772668744050998,
+              "rows": 2993532,
+              "positives": 551464,
+              "coefficients": [
+                -2.421105408768989,
+                -3.271172693687552,
+                0.8492155298907081,
+                0.11071841334828275
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.18474425305565678,
+            "prevalence_test": 0.18421850843752463
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.2930153462269501,
+            "prevalence_test": 0.18421850843752463,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 10100233,
+          "rows_test": 2064447,
+          "positives_train": 1911761,
+          "positives_test": 381328,
+          "prevalence_train": 0.18927890079367476,
+          "prevalence_test": 0.1847119349636973,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1847119349636973,
+              "precision_at_recall_0_5": 0.1847119349636973,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1506142932225563,
+              "rows": 2064447,
+              "positives": 381328
+            },
+            "B1": {
+              "pr_auc": 0.7839483252399624,
+              "precision_at_recall_0_5": 0.8589629229175114,
+              "recall_at_precision_0_5": 0.8717036252255276,
+              "lift_over_prevalence": 4.244167142713529,
+              "roc_auc": 0.9081841107965248,
+              "brier": null,
+              "rows": 2064447,
+              "positives": 381328
+            },
+            "B2": {
+              "pr_auc": 0.2250831885012536,
+              "precision_at_recall_0_5": 0.22178216453088928,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.21856331885371,
+              "roc_auc": 0.5691104886523823,
+              "brier": 0.14947044444271895,
+              "rows": 2064447,
+              "positives": 381328
+            },
+            "B3": {
+              "pr_auc": 0.7933993501533698,
+              "precision_at_recall_0_5": 0.865399715866539,
+              "recall_at_precision_0_5": 0.8854031175261192,
+              "lift_over_prevalence": 4.295333435326212,
+              "roc_auc": 0.9157247734245394,
+              "brier": 0.07412298823176287,
+              "rows": 2064447,
+              "positives": 381328,
+              "coefficients": [
+                -2.5472661462163275,
+                -3.65067751037313,
+                1.00261938702054,
+                0.10566166411410326
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.1848094048295992,
+            "prevalence_test": 0.1847119349636973
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.48135885081983204,
+            "prevalence_test": 0.1847119349636973,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 2031734,
+          "rows_test": 929085,
+          "positives_train": 414860,
+          "positives_test": 170136,
+          "prevalence_train": 0.20419011543833987,
+          "prevalence_test": 0.18312210400555384,
+          "models": {
+            "B0": {
+              "pr_auc": 0.18312210400555384,
+              "precision_at_recall_0_5": 0.18312210400555384,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15003226013586496,
+              "rows": 929085,
+              "positives": 170136
+            },
+            "B1": {
+              "pr_auc": 0.7185888334727862,
+              "precision_at_recall_0_5": 0.7735775278037957,
+              "recall_at_precision_0_5": 0.8215603987398317,
+              "lift_over_prevalence": 3.92409664237471,
+              "roc_auc": 0.8864983776652793,
+              "brier": null,
+              "rows": 929085,
+              "positives": 170136
+            },
+            "B2": {
+              "pr_auc": 0.22739844938619233,
+              "precision_at_recall_0_5": 0.2233639646516544,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2417859144917625,
+              "roc_auc": 0.5774525420719814,
+              "brier": 0.1487750814788924,
+              "rows": 929085,
+              "positives": 170136
+            },
+            "B3": {
+              "pr_auc": 0.7343707993191158,
+              "precision_at_recall_0_5": 0.7846226214962322,
+              "recall_at_precision_0_5": 0.8452238209432454,
+              "lift_over_prevalence": 4.010279388756058,
+              "roc_auc": 0.8978577568720307,
+              "brier": 0.08634714135779947,
+              "rows": 929085,
+              "positives": 170136,
+              "coefficients": [
+                -2.007322099518209,
+                -2.2520957162028954,
+                0.649345121544187,
+                0.04709054468375296
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.18270038218611348,
+            "prevalence_test": 0.18312210400555384
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1103122354306157,
+            "prevalence_test": 0.18312210400555384,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 9787370,
+          "rows_test": 2414380,
+          "positives_train": 2225421,
+          "positives_test": 532168,
+          "prevalence_train": 0.22737681317861694,
+          "prevalence_test": 0.22041600742219536,
+          "models": {
+            "B0": {
+              "pr_auc": 0.22041600742219536,
+              "precision_at_recall_0_5": 0.22041600742219536,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17188124391103274,
+              "rows": 2414380,
+              "positives": 532168
+            },
+            "B1": {
+              "pr_auc": 0.7793748376679207,
+              "precision_at_recall_0_5": 0.8408326038937852,
+              "recall_at_precision_0_5": 0.8757441259151245,
+              "lift_over_prevalence": 3.5359266633256308,
+              "roc_auc": 0.901269022140565,
+              "brier": null,
+              "rows": 2414380,
+              "positives": 532168
+            },
+            "B2": {
+              "pr_auc": 0.2742037880405626,
+              "precision_at_recall_0_5": 0.2674738060978963,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2440284680201994,
+              "roc_auc": 0.5766475555671704,
+              "brier": 0.1698207321335281,
+              "rows": 2414380,
+              "positives": 532168
+            },
+            "B3": {
+              "pr_auc": 0.79106774246957,
+              "precision_at_recall_0_5": 0.8500217230187329,
+              "recall_at_precision_0_5": 0.8937534763458156,
+              "lift_over_prevalence": 3.5889759174991362,
+              "roc_auc": 0.9097391378494313,
+              "brier": 0.08922098066550208,
+              "rows": 2414380,
+              "positives": 532168,
+              "coefficients": [
+                -2.124672516513497,
+                -3.3359378448995995,
+                0.9225926880313752,
+                0.13265106931662513
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2202083187477939,
+            "prevalence_test": 0.22041600742219536
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.28978660964962055,
+            "prevalence_test": 0.22041600742219536,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 8139511,
+          "rows_test": 1653076,
+          "positives_train": 1827010,
+          "positives_test": 367047,
+          "prevalence_train": 0.2244618872067376,
+          "prevalence_test": 0.2220387931347379,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2220387931347379,
+              "precision_at_recall_0_5": 0.2220387931347379,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17274343886288868,
+              "rows": 1653076,
+              "positives": 367047
+            },
+            "B1": {
+              "pr_auc": 0.7996061154190481,
+              "precision_at_recall_0_5": 0.8659856081160788,
+              "recall_at_precision_0_5": 0.8908995305778279,
+              "lift_over_prevalence": 3.6012000611705273,
+              "roc_auc": 0.908857510578368,
+              "brier": null,
+              "rows": 1653076,
+              "positives": 367047
+            },
+            "B2": {
+              "pr_auc": 0.27118114721387754,
+              "precision_at_recall_0_5": 0.26799433607592094,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2213232804292853,
+              "roc_auc": 0.573867838073931,
+              "brier": 0.17089215578378522,
+              "rows": 1653076,
+              "positives": 367047
+            },
+            "B3": {
+              "pr_auc": 0.810777316255291,
+              "precision_at_recall_0_5": 0.8744401456097887,
+              "recall_at_precision_0_5": 0.9072271398485753,
+              "lift_over_prevalence": 3.651511993957263,
+              "roc_auc": 0.9170425087514175,
+              "brier": 0.08511659524208888,
+              "rows": 1653076,
+              "positives": 367047,
+              "coefficients": [
+                -2.2541232454275644,
+                -3.776281451837846,
+                1.1161089997172136,
+                0.12817172800369242
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.221860818187801,
+            "prevalence_test": 0.2220387931347379
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.3999098957912287,
+            "prevalence_test": 0.2220387931347379,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1647859,
+          "rows_test": 761304,
+          "positives_train": 398411,
+          "positives_test": 165121,
+          "prevalence_train": 0.2417749334135991,
+          "prevalence_test": 0.21689233210386388,
+          "models": {
+            "B0": {
+              "pr_auc": 0.21689233210386388,
+              "precision_at_recall_0_5": 0.21689233210386388,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17046919222635032,
+              "rows": 761304,
+              "positives": 165121
+            },
+            "B1": {
+              "pr_auc": 0.7326613342866691,
+              "precision_at_recall_0_5": 0.7806005710719891,
+              "recall_at_precision_0_5": 0.835853707281327,
+              "lift_over_prevalence": 3.3779955574262415,
+              "roc_auc": 0.8842877707860383,
+              "brier": null,
+              "rows": 761304,
+              "positives": 165121
+            },
+            "B2": {
+              "pr_auc": 0.26454063146962714,
+              "precision_at_recall_0_5": 0.26243680995654106,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2196864172355608,
+              "roc_auc": 0.5711657477106247,
+              "brier": 0.1685377638295427,
+              "rows": 761304,
+              "positives": 165121
+            },
+            "B3": {
+              "pr_auc": 0.749814096557553,
+              "precision_at_recall_0_5": 0.7937107643795845,
+              "recall_at_precision_0_5": 0.8647961192095494,
+              "lift_over_prevalence": 3.4570797837080165,
+              "roc_auc": 0.8957826715758868,
+              "brier": 0.09867516063913326,
+              "rows": 761304,
+              "positives": 165121,
+              "coefficients": [
+                -1.7151822290509886,
+                -2.2014506442506634,
+                0.6665604977545541,
+                0.05424268830484559
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.21678300019209312,
+            "prevalence_test": 0.21689233210386388
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.4481835735502738,
+            "prevalence_test": 0.21689233210386388,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 79.76
+    },
+    {
+      "split": {
+        "name": "loso-2021",
+        "train_years": [
+          2019,
+          2020,
+          2022,
+          2023,
+          2024
+        ],
+        "test_year": 2021
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2486737,
+          "positives": 419244.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2701807,
+          "positives": 487938.0
+        },
+        {
+          "year": 2021,
+          "split": "test",
+          "rows": 3091628,
+          "positives": 663757.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2595725,
+          "positives": 510550.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1442188,
+          "positives": 222359.0
+        },
+        {
+          "year": 2024,
+          "split": "train",
+          "rows": 2641411,
+          "positives": 559520.0
+        }
+      ],
+      "rows_train": 11867868,
+      "rows_test": 3091628,
+      "positive_rate_train": 0.18534171428263274,
+      "positive_rate_test": 0.21469497623905592,
+      "week_index_test": [
+        {
+          "week_index": 2,
+          "rows": 145888,
+          "positive_rate": 0.1405530269796008
+        },
+        {
+          "week_index": 3,
+          "rows": 223014,
+          "positive_rate": 0.11631108360910078
+        },
+        {
+          "week_index": 4,
+          "rows": 221003,
+          "positive_rate": 0.08712098930783745
+        },
+        {
+          "week_index": 5,
+          "rows": 219690,
+          "positive_rate": 0.11908598479675907
+        },
+        {
+          "week_index": 6,
+          "rows": 219842,
+          "positive_rate": 0.14655980203964666
+        },
+        {
+          "week_index": 7,
+          "rows": 217313,
+          "positive_rate": 0.17131970935931123
+        },
+        {
+          "week_index": 8,
+          "rows": 218492,
+          "positive_rate": 0.18907328414770336
+        },
+        {
+          "week_index": 9,
+          "rows": 149891,
+          "positive_rate": 0.1868224242949877
+        },
+        {
+          "week_index": 10,
+          "rows": 153503,
+          "positive_rate": 0.2002631870386898
+        },
+        {
+          "week_index": 11,
+          "rows": 153486,
+          "positive_rate": 0.19876079903053048
+        },
+        {
+          "week_index": 12,
+          "rows": 224857,
+          "positive_rate": 0.22411132408597464
+        },
+        {
+          "week_index": 13,
+          "rows": 225018,
+          "positive_rate": 0.26527211156440816
+        },
+        {
+          "week_index": 14,
+          "rows": 223834,
+          "positive_rate": 0.30947487870475443
+        },
+        {
+          "week_index": 15,
+          "rows": 213673,
+          "positive_rate": 0.36315304226551787
+        },
+        {
+          "week_index": 16,
+          "rows": 102100,
+          "positive_rate": 0.41261508325171403
+        },
+        {
+          "week_index": 17,
+          "rows": 88560,
+          "positive_rate": 0.41261291779584464
+        },
+        {
+          "week_index": 18,
+          "rows": 91464,
+          "positive_rate": 0.39649479576664043
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 11867868,
+          "rows_test": 3091628,
+          "positives_train": 2199611,
+          "positives_test": 663757,
+          "prevalence_train": 0.18534171428263274,
+          "prevalence_test": 0.21469497623905592,
+          "models": {
+            "B0": {
+              "pr_auc": 0.21469497623905592,
+              "precision_at_recall_0_5": 0.21469497623905592,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.16946265740424954,
+              "rows": 3091628,
+              "positives": 663757
+            },
+            "B1": {
+              "pr_auc": 0.7928367785465605,
+              "precision_at_recall_0_5": 0.8577125356972102,
+              "recall_at_precision_0_5": 0.8904659385889716,
+              "lift_over_prevalence": 3.692852028655586,
+              "roc_auc": 0.9082371294866862,
+              "brier": null,
+              "rows": 3091628,
+              "positives": 663757
+            },
+            "B2": {
+              "pr_auc": 0.2679297754725206,
+              "precision_at_recall_0_5": 0.23003645222863742,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2479554955873278,
+              "roc_auc": 0.551908788889671,
+              "brier": 0.1682968763676253,
+              "rows": 3091628,
+              "positives": 663757
+            },
+            "B3": {
+              "pr_auc": 0.8070308708649511,
+              "precision_at_recall_0_5": 0.8713136166135024,
+              "recall_at_precision_0_5": 0.9050330166009549,
+              "lift_over_prevalence": 3.7589648579683033,
+              "roc_auc": 0.9178106262561323,
+              "brier": 0.08474492023591652,
+              "rows": 3091628,
+              "positives": 663757,
+              "coefficients": [
+                -2.4723029031475536,
+                -3.175130330573041,
+                0.7599039732987442,
+                0.12955364520425167
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2145544710114961,
+            "prevalence_test": 0.21469497623905592
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.14774398250340834,
+            "prevalence_test": 0.21469497623905592,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 9829284,
+          "rows_test": 2482554,
+          "positives_train": 1831212,
+          "positives_test": 551534,
+          "prevalence_train": 0.18630166754770744,
+          "prevalence_test": 0.22216394890101082,
+          "models": {
+            "B0": {
+              "pr_auc": 0.22216394890101082,
+              "precision_at_recall_0_5": 0.22216394890101082,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17409323193358336,
+              "rows": 2482554,
+              "positives": 551534
+            },
+            "B1": {
+              "pr_auc": 0.8003712387058977,
+              "precision_at_recall_0_5": 0.8684371299725392,
+              "recall_at_precision_0_5": 0.8937255001504893,
+              "lift_over_prevalence": 3.602615287786938,
+              "roc_auc": 0.9080550603896737,
+              "brier": null,
+              "rows": 2482554,
+              "positives": 551534
+            },
+            "B2": {
+              "pr_auc": 0.276764917460627,
+              "precision_at_recall_0_5": 0.2628631158401681,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.245768806458984,
+              "roc_auc": 0.5512921189437895,
+              "brier": 0.1729559039215597,
+              "rows": 2482554,
+              "positives": 551534
+            },
+            "B3": {
+              "pr_auc": 0.8197499052485941,
+              "precision_at_recall_0_5": 0.8880584037510305,
+              "recall_at_precision_0_5": 0.9106238237352547,
+              "lift_over_prevalence": 3.689842160727205,
+              "roc_auc": 0.9197539678578183,
+              "brier": 0.0846041938526189,
+              "rows": 2482554,
+              "positives": 551534,
+              "coefficients": [
+                -2.5595240628831206,
+                -3.524579183688653,
+                0.878863539707141,
+                0.10802096465995206
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.22179064451413863,
+            "prevalence_test": 0.22216394890101082
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.29743204032046694,
+            "prevalence_test": 0.22216394890101082,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 2038584,
+          "rows_test": 609074,
+          "positives_train": 368399,
+          "positives_test": 112223,
+          "prevalence_train": 0.18071318130624,
+          "prevalence_test": 0.1842518314687542,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1842518314687542,
+              "precision_at_recall_0_5": 0.1842518314687542,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15031561611413666,
+              "rows": 609074,
+              "positives": 112223
+            },
+            "B1": {
+              "pr_auc": 0.7603190565910578,
+              "precision_at_recall_0_5": 0.8101061141990904,
+              "recall_at_precision_0_5": 0.8692335795692505,
+              "lift_over_prevalence": 4.1265210257624725,
+              "roc_auc": 0.9103263213036467,
+              "brier": null,
+              "rows": 609074,
+              "positives": 112223
+            },
+            "B2": {
+              "pr_auc": 0.16504013740290382,
+              "precision_at_recall_0_5": 0.15365802234872444,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 0.8957313264530109,
+              "roc_auc": 0.4189425856902246,
+              "brier": 0.15068770588812172,
+              "rows": 609074,
+              "positives": 112223
+            },
+            "B3": {
+              "pr_auc": 0.7379578107421204,
+              "precision_at_recall_0_5": 0.7809820732657833,
+              "recall_at_precision_0_5": 0.8553950616183849,
+              "lift_over_prevalence": 4.005158618286325,
+              "roc_auc": 0.903387099492233,
+              "brier": 0.0864245572992225,
+              "rows": 609074,
+              "positives": 112223,
+              "coefficients": [
+                -2.203954949509325,
+                -2.212821868857523,
+                0.6851903287109784,
+                0.1137248902017506
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.18416724311818206,
+            "prevalence_test": 0.1842518314687542
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.6186712089970449,
+            "prevalence_test": 0.1842518314687542,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 9550879,
+          "rows_test": 2503997,
+          "positives_train": 2098368,
+          "positives_test": 635299,
+          "prevalence_train": 0.21970417591930544,
+          "prevalence_test": 0.25371396211736674,
+          "models": {
+            "B0": {
+              "pr_auc": 0.25371396211736674,
+              "precision_at_recall_0_5": 0.25371396211736674,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.190499853101312,
+              "rows": 2503997,
+              "positives": 635299
+            },
+            "B1": {
+              "pr_auc": 0.8082104071568718,
+              "precision_at_recall_0_5": 0.8642902426216306,
+              "recall_at_precision_0_5": 0.9161953662763518,
+              "lift_over_prevalence": 3.1855180551041093,
+              "roc_auc": 0.9087892686405353,
+              "brier": null,
+              "rows": 2503997,
+              "positives": 635299
+            },
+            "B2": {
+              "pr_auc": 0.31814238626232094,
+              "precision_at_recall_0_5": 0.2727014921503299,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2539411848180035,
+              "roc_auc": 0.5558507921980931,
+              "brier": 0.18867575654030927,
+              "rows": 2503997,
+              "positives": 635299
+            },
+            "B3": {
+              "pr_auc": 0.8245582099304379,
+              "precision_at_recall_0_5": 0.8799242098964811,
+              "recall_at_precision_0_5": 0.9328442198083108,
+              "lift_over_prevalence": 3.249952044613933,
+              "roc_auc": 0.9194768727940058,
+              "brier": 0.09471919387209429,
+              "rows": 2503997,
+              "positives": 635299,
+              "coefficients": [
+                -2.1817899874691933,
+                -3.244956301971957,
+                0.8345850686362362,
+                0.15045830696212334
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.25362361682890455,
+            "prevalence_test": 0.25371396211736674
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.4591422634778425,
+            "prevalence_test": 0.25371396211736674,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 7904997,
+          "rows_test": 2002426,
+          "positives_train": 1745715,
+          "positives_test": 528042,
+          "prevalence_train": 0.2208368959532812,
+          "prevalence_test": 0.2637011305286687,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2637011305286687,
+              "precision_at_recall_0_5": 0.2637011305286687,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.19600018689230464,
+              "rows": 2002426,
+              "positives": 528042
+            },
+            "B1": {
+              "pr_auc": 0.8173957035907063,
+              "precision_at_recall_0_5": 0.8757002557239375,
+              "recall_at_precision_0_5": 0.9234076077281731,
+              "lift_over_prevalence": 3.0997049650564232,
+              "roc_auc": 0.9097896158703856,
+              "brier": null,
+              "rows": 2002426,
+              "positives": 528042
+            },
+            "B2": {
+              "pr_auc": 0.3293907922808303,
+              "precision_at_recall_0_5": 0.31149955511787214,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.249106485135148,
+              "roc_auc": 0.5541931366237437,
+              "brier": 0.19414138347600204,
+              "rows": 2002426,
+              "positives": 528042
+            },
+            "B3": {
+              "pr_auc": 0.8392107474379042,
+              "precision_at_recall_0_5": 0.8979786883071387,
+              "recall_at_precision_0_5": 0.9413474685725757,
+              "lift_over_prevalence": 3.182431359909047,
+              "roc_auc": 0.9228877290090189,
+              "brier": 0.09437107407617623,
+              "rows": 2002426,
+              "positives": 528042,
+              "coefficients": [
+                -2.2676316580202895,
+                -3.6474605977786463,
+                0.988783525241405,
+                0.12827692165311824
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2635962186544844,
+            "prevalence_test": 0.2637011305286687
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.19812170856282108,
+            "prevalence_test": 0.2637011305286687,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1645882,
+          "rows_test": 501571,
+          "positives_train": 352653,
+          "positives_test": 107257,
+          "prevalence_train": 0.2142638415147623,
+          "prevalence_test": 0.21384210809636123,
+          "models": {
+            "B0": {
+              "pr_auc": 0.21384210809636123,
+              "precision_at_recall_0_5": 0.21384210809636123,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1681138387603416,
+              "rows": 501571,
+              "positives": 107257
+            },
+            "B1": {
+              "pr_auc": 0.7688725020246862,
+              "precision_at_recall_0_5": 0.8126960554031732,
+              "recall_at_precision_0_5": 0.8809401717370428,
+              "lift_over_prevalence": 3.5955149753677977,
+              "roc_auc": 0.9065899873964812,
+              "brier": null,
+              "rows": 501571,
+              "positives": 107257
+            },
+            "B2": {
+              "pr_auc": 0.2227254809531978,
+              "precision_at_recall_0_5": 0.18034869172605125,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.041541738135286,
+              "roc_auc": 0.4642231042785082,
+              "brier": 0.1689666353255136,
+              "rows": 501571,
+              "positives": 107257
+            },
+            "B3": {
+              "pr_auc": 0.751525279081914,
+              "precision_at_recall_0_5": 0.7899977903807911,
+              "recall_at_precision_0_5": 0.8722321153864083,
+              "lift_over_prevalence": 3.514393333343229,
+              "roc_auc": 0.9005242814056241,
+              "brier": 0.09697821754906026,
+              "rows": 501571,
+              "positives": 107257,
+              "coefficients": [
+                -1.9245859516742194,
+                -2.1734872631843127,
+                0.6924828307255857,
+                0.12850671504782596
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.21329916077515299,
+            "prevalence_test": 0.21384210809636123
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.5594819721557263,
+            "prevalence_test": 0.21384210809636123,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 79.78
+    },
+    {
+      "split": {
+        "name": "loso-2022",
+        "train_years": [
+          2019,
+          2020,
+          2021,
+          2023,
+          2024
+        ],
+        "test_year": 2022
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2659073,
+          "positives": 461389.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2800583,
+          "positives": 533367.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2911264,
+          "positives": 627072.0
+        },
+        {
+          "year": 2022,
+          "split": "test",
+          "rows": 2737422,
+          "positives": 546771.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1542222,
+          "positives": 244585.0
+        },
+        {
+          "year": 2024,
+          "split": "train",
+          "rows": 2853467,
+          "positives": 643072.0
+        }
+      ],
+      "rows_train": 12766609,
+      "rows_test": 2737422,
+      "positive_rate_train": 0.196566292584037,
+      "positive_rate_test": 0.19973938983466927,
+      "week_index_test": [
+        {
+          "week_index": 3,
+          "rows": 223390,
+          "positive_rate": 0.20169210797260398
+        },
+        {
+          "week_index": 4,
+          "rows": 172345,
+          "positive_rate": 0.22489193188082043
+        },
+        {
+          "week_index": 5,
+          "rows": 169408,
+          "positive_rate": 0.2907300717793729
+        },
+        {
+          "week_index": 6,
+          "rows": 167199,
+          "positive_rate": 0.32064186986764276
+        },
+        {
+          "week_index": 7,
+          "rows": 213777,
+          "positive_rate": 0.2862094612610337
+        },
+        {
+          "week_index": 8,
+          "rows": 215723,
+          "positive_rate": 0.23423557061602146
+        },
+        {
+          "week_index": 9,
+          "rows": 208755,
+          "positive_rate": 0.19830423223395846
+        },
+        {
+          "week_index": 10,
+          "rows": 211379,
+          "positive_rate": 0.1604795178328973
+        },
+        {
+          "week_index": 11,
+          "rows": 213143,
+          "positive_rate": 0.1413135782080575
+        },
+        {
+          "week_index": 12,
+          "rows": 223682,
+          "positive_rate": 0.12188732218059567
+        },
+        {
+          "week_index": 13,
+          "rows": 165387,
+          "positive_rate": 0.1240726296504562
+        },
+        {
+          "week_index": 14,
+          "rows": 122436,
+          "positive_rate": 0.13986899277990134
+        },
+        {
+          "week_index": 15,
+          "rows": 103209,
+          "positive_rate": 0.15087831487564068
+        },
+        {
+          "week_index": 16,
+          "rows": 119858,
+          "positive_rate": 0.1812478099083916
+        },
+        {
+          "week_index": 17,
+          "rows": 94943,
+          "positive_rate": 0.18829192252193422
+        },
+        {
+          "week_index": 18,
+          "rows": 112788,
+          "positive_rate": 0.20265453771677838
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 12766609,
+          "rows_test": 2737422,
+          "positives_train": 2509485,
+          "positives_test": 546771,
+          "prevalence_train": 0.196566292584037,
+          "prevalence_test": 0.19973938983466927,
+          "models": {
+            "B0": {
+              "pr_auc": 0.19973938983466927,
+              "precision_at_recall_0_5": 0.19973938983466927,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15985363452930526,
+              "rows": 2737422,
+              "positives": 546771
+            },
+            "B1": {
+              "pr_auc": 0.7425251417103248,
+              "precision_at_recall_0_5": 0.7887219108011967,
+              "recall_at_precision_0_5": 0.8528835655146304,
+              "lift_over_prevalence": 3.717469760596229,
+              "roc_auc": 0.8922488379595124,
+              "brier": null,
+              "rows": 2737422,
+              "positives": 546771
+            },
+            "B2": {
+              "pr_auc": 0.21440115126015016,
+              "precision_at_recall_0_5": 0.23476341597812847,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0734044568656034,
+              "roc_auc": 0.5420247859096162,
+              "brier": 0.15961036777630866,
+              "rows": 2737422,
+              "positives": 546771
+            },
+            "B3": {
+              "pr_auc": 0.7503454698735931,
+              "precision_at_recall_0_5": 0.8006032652463577,
+              "recall_at_precision_0_5": 0.8675167483279106,
+              "lift_over_prevalence": 3.756622419316882,
+              "roc_auc": 0.8995723583240995,
+              "brier": 0.08886027254048591,
+              "rows": 2737422,
+              "positives": 546771,
+              "coefficients": [
+                -2.3890375735009264,
+                -3.3502885540439302,
+                0.8634019471188051,
+                0.16209839796406186
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.1996678892488605,
+            "prevalence_test": 0.19973938983466927
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.2037733635253256,
+            "prevalence_test": 0.19973938983466927,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 10896657,
+          "rows_test": 1849324,
+          "positives_train": 2140755,
+          "positives_test": 344174,
+          "prevalence_train": 0.19645979496280372,
+          "prevalence_test": 0.18610800487096907,
+          "models": {
+            "B0": {
+              "pr_auc": 0.18610800487096907,
+              "precision_at_recall_0_5": 0.18610800487096907,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15157897495202183,
+              "rows": 1849324,
+              "positives": 344174
+            },
+            "B1": {
+              "pr_auc": 0.7736962633621427,
+              "precision_at_recall_0_5": 0.8266935046093686,
+              "recall_at_precision_0_5": 0.8843259514082993,
+              "lift_over_prevalence": 4.157243337805677,
+              "roc_auc": 0.9153519954093177,
+              "brier": null,
+              "rows": 1849324,
+              "positives": 344174
+            },
+            "B2": {
+              "pr_auc": 0.20924295720616365,
+              "precision_at_recall_0_5": 0.226296749626003,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1243092813295932,
+              "roc_auc": 0.560476432853972,
+              "brier": 0.15051045335077926,
+              "rows": 1849324,
+              "positives": 344174
+            },
+            "B3": {
+              "pr_auc": 0.7809726118504694,
+              "precision_at_recall_0_5": 0.8374878333657777,
+              "recall_at_precision_0_5": 0.8961542708048835,
+              "lift_over_prevalence": 4.19634078819945,
+              "roc_auc": 0.9207898704100806,
+              "brier": 0.07686994486002859,
+              "rows": 1849324,
+              "positives": 344174,
+              "coefficients": [
+                -2.467088387353591,
+                -3.725842423707073,
+                1.0514047708375647,
+                0.13558896812450888
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.1863614371701296,
+            "prevalence_test": 0.18610800487096907
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.5223033813973403,
+            "prevalence_test": 0.18610800487096907,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 1869952,
+          "rows_test": 888098,
+          "positives_train": 368730,
+          "positives_test": 202597,
+          "prevalence_train": 0.1971868796632213,
+          "prevalence_test": 0.2281245988618373,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2281245988618373,
+              "precision_at_recall_0_5": 0.2281245988618373,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17704090872517556,
+              "rows": 888098,
+              "positives": 202597
+            },
+            "B1": {
+              "pr_auc": 0.690805363743686,
+              "precision_at_recall_0_5": 0.7215748009060733,
+              "recall_at_precision_0_5": 0.8025390306865353,
+              "lift_over_prevalence": 3.0281932206796744,
+              "roc_auc": 0.8519466767759456,
+              "brier": null,
+              "rows": 888098,
+              "positives": 202597
+            },
+            "B2": {
+              "pr_auc": 0.23567408609633195,
+              "precision_at_recall_0_5": 0.25267746534838603,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0330937008641796,
+              "roc_auc": 0.524684432915816,
+              "brier": 0.17782842223378148,
+              "rows": 888098,
+              "positives": 202597
+            },
+            "B3": {
+              "pr_auc": 0.706213038420598,
+              "precision_at_recall_0_5": 0.7366503530575291,
+              "recall_at_precision_0_5": 0.8381269219188833,
+              "lift_over_prevalence": 3.0957338311784297,
+              "roc_auc": 0.8687041912670391,
+              "brier": 0.11543483266610481,
+              "rows": 888098,
+              "positives": 202597,
+              "coefficients": [
+                -2.0985058669216508,
+                -2.257136805335351,
+                0.5531292227777332,
+                0.033224125926145105
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2280092511522978,
+            "prevalence_test": 0.2281245988618373
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.35031481211602356,
+            "prevalence_test": 0.2281245988618373,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 10309023,
+          "rows_test": 2205879,
+          "positives_train": 2397739,
+          "positives_test": 524049,
+          "prevalence_train": 0.2325864439336298,
+          "prevalence_test": 0.2375692411052465,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2375692411052465,
+              "precision_at_recall_0_5": 0.2375692411052465,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1811549250535772,
+              "rows": 2205879,
+              "positives": 524049
+            },
+            "B1": {
+              "pr_auc": 0.7573645771687397,
+              "precision_at_recall_0_5": 0.7965108856234383,
+              "recall_at_precision_0_5": 0.8736892924134957,
+              "lift_over_prevalence": 3.1879740560909426,
+              "roc_auc": 0.8889819682188281,
+              "brier": null,
+              "rows": 2205879,
+              "positives": 524049
+            },
+            "B2": {
+              "pr_auc": 0.2590809268158515,
+              "precision_at_recall_0_5": 0.2812069733969618,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0905491199556219,
+              "roc_auc": 0.5525681108000818,
+              "brier": 0.18065636120338266,
+              "rows": 2205879,
+              "positives": 524049
+            },
+            "B3": {
+              "pr_auc": 0.7660580252033165,
+              "precision_at_recall_0_5": 0.8094936513330656,
+              "recall_at_precision_0_5": 0.8905045138908766,
+              "lift_over_prevalence": 3.22456737934328,
+              "roc_auc": 0.8971799506906769,
+              "brier": 0.10153514326778709,
+              "rows": 2205879,
+              "positives": 524049,
+              "coefficients": [
+                -2.0902555462982524,
+                -3.418128147744956,
+                0.940763045666719,
+                0.18569952247693658
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.23754320662557393,
+            "prevalence_test": 0.2375692411052465
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1573024897672082,
+            "prevalence_test": 0.2375692411052465,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 8794776,
+          "rows_test": 1482444,
+          "positives_train": 2045428,
+          "positives_test": 328969,
+          "prevalence_train": 0.23257306382789056,
+          "prevalence_test": 0.22190990013788042,
+          "models": {
+            "B0": {
+              "pr_auc": 0.22190990013788042,
+              "precision_at_recall_0_5": 0.22190990013788042,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.17277959941855633,
+              "rows": 1482444,
+              "positives": 328969
+            },
+            "B1": {
+              "pr_auc": 0.7876147932434291,
+              "precision_at_recall_0_5": 0.8356533932145869,
+              "recall_at_precision_0_5": 0.9031276503257146,
+              "lift_over_prevalence": 3.549254867646988,
+              "roc_auc": 0.9125308214543922,
+              "brier": null,
+              "rows": 1482444,
+              "positives": 328969
+            },
+            "B2": {
+              "pr_auc": 0.2531273473645727,
+              "precision_at_recall_0_5": 0.27284341027590997,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.14067622583443,
+              "roc_auc": 0.5686628629289158,
+              "brier": 0.17096323524493076,
+              "rows": 1482444,
+              "positives": 328969
+            },
+            "B3": {
+              "pr_auc": 0.7966445206791168,
+              "precision_at_recall_0_5": 0.8473236041066746,
+              "recall_at_precision_0_5": 0.916630442382109,
+              "lift_over_prevalence": 3.5899458301956497,
+              "roc_auc": 0.9194584492897235,
+              "brier": 0.0879285702267353,
+              "rows": 1482444,
+              "positives": 328969,
+              "coefficients": [
+                -2.1671379740469066,
+                -3.842202529934869,
+                1.163019597284949,
+                0.1589828192183437
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2220309190836689,
+            "prevalence_test": 0.22190990013788042
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1240225059790873,
+            "prevalence_test": 0.22190990013788042,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1514247,
+          "rows_test": 723435,
+          "positives_train": 352311,
+          "positives_test": 195080,
+          "prevalence_train": 0.232664155847758,
+          "prevalence_test": 0.26965795130177556,
+          "models": {
+            "B0": {
+              "pr_auc": 0.26965795130177556,
+              "precision_at_recall_0_5": 0.26965795130177556,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1983110815035985,
+              "rows": 723435,
+              "positives": 195080
+            },
+            "B1": {
+              "pr_auc": 0.7073415955432438,
+              "precision_at_recall_0_5": 0.7275086892313201,
+              "recall_at_precision_0_5": 0.8280705351650605,
+              "lift_over_prevalence": 2.6231067622094866,
+              "roc_auc": 0.8474496852152915,
+              "brier": null,
+              "rows": 723435,
+              "positives": 195080
+            },
+            "B2": {
+              "pr_auc": 0.27690095444679486,
+              "precision_at_recall_0_5": 0.2969045300956417,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0268599650410961,
+              "roc_auc": 0.5241020501940258,
+              "brier": 0.19918227353746965,
+              "rows": 723435,
+              "positives": 195080
+            },
+            "B3": {
+              "pr_auc": 0.724478411382065,
+              "precision_at_recall_0_5": 0.7462720825076701,
+              "recall_at_precision_0_5": 0.8675056387123231,
+              "lift_over_prevalence": 2.6866569588793534,
+              "roc_auc": 0.8647913272691555,
+              "brier": 0.1300577219837508,
+              "rows": 723435,
+              "positives": 195080,
+              "coefficients": [
+                -1.8124667687550458,
+                -2.2109178188507776,
+                0.5703939017027152,
+                0.0304614204045105
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.27006788926557457,
+            "prevalence_test": 0.26965795130177556
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1887870071995874,
+            "prevalence_test": 0.26965795130177556,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 81.11
+    },
+    {
+      "split": {
+        "name": "loso-2023",
+        "train_years": [
+          2019,
+          2020,
+          2021,
+          2022,
+          2024
+        ],
+        "test_year": 2023
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2530347,
+          "positives": 401258.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2794181,
+          "positives": 501032.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2732939,
+          "positives": 582666.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2646593,
+          "positives": 523047.0
+        },
+        {
+          "year": 2023,
+          "split": "test",
+          "rows": 1612478,
+          "positives": 251411.0
+        },
+        {
+          "year": 2024,
+          "split": "train",
+          "rows": 2684708,
+          "positives": 553400.0
+        }
+      ],
+      "rows_train": 13388768,
+      "rows_test": 1612478,
+      "positive_rate_train": 0.1913098352290517,
+      "positive_rate_test": 0.15591592567464485,
+      "week_index_test": [
+        {
+          "week_index": 5,
+          "rows": 219487,
+          "positive_rate": 0.19680436654562686
+        },
+        {
+          "week_index": 6,
+          "rows": 222167,
+          "positive_rate": 0.17251887093942844
+        },
+        {
+          "week_index": 7,
+          "rows": 39860,
+          "positive_rate": 0.160863020572002
+        },
+        {
+          "week_index": 8,
+          "rows": 39896,
+          "positive_rate": 0.1422699017445358
+        },
+        {
+          "week_index": 9,
+          "rows": 39763,
+          "positive_rate": 0.09121545155043634
+        },
+        {
+          "week_index": 10,
+          "rows": 222999,
+          "positive_rate": 0.08404073560867986
+        },
+        {
+          "week_index": 11,
+          "rows": 222998,
+          "positive_rate": 0.07310379465286684
+        },
+        {
+          "week_index": 15,
+          "rows": 159024,
+          "positive_rate": 0.15875591105745046
+        },
+        {
+          "week_index": 16,
+          "rows": 175982,
+          "positive_rate": 0.21047607141639485
+        },
+        {
+          "week_index": 17,
+          "rows": 121156,
+          "positive_rate": 0.21446729835914027
+        },
+        {
+          "week_index": 18,
+          "rows": 149146,
+          "positive_rate": 0.20690464377187454
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 13388768,
+          "rows_test": 1612478,
+          "positives_train": 2561403,
+          "positives_test": 251411,
+          "prevalence_train": 0.1913098352290517,
+          "prevalence_test": 0.15591592567464485,
+          "models": {
+            "B0": {
+              "pr_auc": 0.15591592567464485,
+              "precision_at_recall_0_5": 0.15591592567464485,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.13285887862920903,
+              "rows": 1612478,
+              "positives": 251411
+            },
+            "B1": {
+              "pr_auc": 0.6964567954027973,
+              "precision_at_recall_0_5": 0.7369198571956174,
+              "recall_at_precision_0_5": 0.7932190715601147,
+              "lift_over_prevalence": 4.466874005264335,
+              "roc_auc": 0.8915851697650912,
+              "brier": null,
+              "rows": 1612478,
+              "positives": 251411
+            },
+            "B2": {
+              "pr_auc": 0.1937116937279915,
+              "precision_at_recall_0_5": 0.18893391826687497,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2424112090526043,
+              "roc_auc": 0.5989599423340773,
+              "brier": 0.1315988156018124,
+              "rows": 1612478,
+              "positives": 251411
+            },
+            "B3": {
+              "pr_auc": 0.7050133120183498,
+              "precision_at_recall_0_5": 0.7498657822212148,
+              "recall_at_precision_0_5": 0.8176650981858391,
+              "lift_over_prevalence": 4.521753047148791,
+              "roc_auc": 0.8984165062348993,
+              "brier": 0.07758987428756199,
+              "rows": 1612478,
+              "positives": 251411,
+              "coefficients": [
+                -2.5002759877328127,
+                -3.492203660574378,
+                0.9312936209544065,
+                0.16902219071652225
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.15613228621054492,
+            "prevalence_test": 0.15591592567464485
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.648286183606407,
+            "prevalence_test": 0.15591592567464485,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 11379593,
+          "rows_test": 267449,
+          "positives_train": 2155122,
+          "positives_test": 35765,
+          "prevalence_train": 0.18938480488713436,
+          "prevalence_test": 0.13372643008573598,
+          "models": {
+            "B0": {
+              "pr_auc": 0.13372643008573598,
+              "precision_at_recall_0_5": 0.13372643008573598,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.11894152666779369,
+              "rows": 267449,
+              "positives": 35765
+            },
+            "B1": {
+              "pr_auc": 0.8088914871529643,
+              "precision_at_recall_0_5": 0.8856477812995246,
+              "recall_at_precision_0_5": 0.9011044317069761,
+              "lift_over_prevalence": 6.048852770797516,
+              "roc_auc": 0.9450386858440576,
+              "brier": null,
+              "rows": 267449,
+              "positives": 35765
+            },
+            "B2": {
+              "pr_auc": 0.1895745241105554,
+              "precision_at_recall_0_5": 0.20359640543981694,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.4176294393637334,
+              "roc_auc": 0.6511058842463281,
+              "brier": 0.11706808273508636,
+              "rows": 267449,
+              "positives": 35765
+            },
+            "B3": {
+              "pr_auc": 0.8105768632880606,
+              "precision_at_recall_0_5": 0.8822832897528246,
+              "recall_at_precision_0_5": 0.9066964909828045,
+              "lift_over_prevalence": 6.0614559348393255,
+              "roc_auc": 0.9477345729948127,
+              "brier": 0.054514180594264494,
+              "rows": 267449,
+              "positives": 35765,
+              "coefficients": [
+                -2.5880630624655394,
+                -3.8540096867191314,
+                1.1379078894982142,
+                0.1405195194387548
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.13312595957164378,
+            "prevalence_test": 0.13372643008573598
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.07731821947141455,
+            "prevalence_test": 0.13372643008573598,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 2009175,
+          "rows_test": 1345029,
+          "positives_train": 406281,
+          "positives_test": 215646,
+          "prevalence_train": 0.20221284855724364,
+          "prevalence_test": 0.1603281416237122,
+          "models": {
+            "B0": {
+              "pr_auc": 0.1603281416237122,
+              "precision_at_recall_0_5": 0.1603281416237122,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1363773573021069,
+              "rows": 1345029,
+              "positives": 215646
+            },
+            "B1": {
+              "pr_auc": 0.6763812733637593,
+              "precision_at_recall_0_5": 0.7102122277990752,
+              "recall_at_precision_0_5": 0.7741390983370895,
+              "lift_over_prevalence": 4.218730826127931,
+              "roc_auc": 0.8815075741092697,
+              "brier": null,
+              "rows": 1345029,
+              "positives": 215646
+            },
+            "B2": {
+              "pr_auc": 0.19834295364449417,
+              "precision_at_recall_0_5": 0.2063421154139419,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.237106297346115,
+              "roc_auc": 0.599065493974211,
+              "brier": 0.13913244407473918,
+              "rows": 1345029,
+              "positives": 215646
+            },
+            "B3": {
+              "pr_auc": 0.682605489304765,
+              "precision_at_recall_0_5": 0.7233238967973917,
+              "recall_at_precision_0_5": 0.8045175890116208,
+              "lift_over_prevalence": 4.257552556848254,
+              "roc_auc": 0.889492715515498,
+              "brier": 0.08276820004249483,
+              "rows": 1345029,
+              "positives": 215646,
+              "coefficients": [
+                -2.1691731005955415,
+                -2.492597625684092,
+                0.5801552865467452,
+                0.1012225269238875
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.16034916507932115,
+            "prevalence_test": 0.1603281416237122
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.20137960233724378,
+            "prevalence_test": 0.1603281416237122,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 10795910,
+          "rows_test": 1305003,
+          "positives_train": 2450630,
+          "positives_test": 240580,
+          "prevalence_train": 0.2269961494677151,
+          "prevalence_test": 0.18435206662360162,
+          "models": {
+            "B0": {
+              "pr_auc": 0.18435206662360162,
+              "precision_at_recall_0_5": 0.18435206662360162,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15218489995682438,
+              "rows": 1305003,
+              "positives": 240580
+            },
+            "B1": {
+              "pr_auc": 0.70965712017294,
+              "precision_at_recall_0_5": 0.7421643632773939,
+              "recall_at_precision_0_5": 0.8076731232853936,
+              "lift_over_prevalence": 3.8494665840761795,
+              "roc_auc": 0.8904664983223486,
+              "brier": null,
+              "rows": 1305003,
+              "positives": 240580
+            },
+            "B2": {
+              "pr_auc": 0.2313566572697586,
+              "precision_at_recall_0_5": 0.22469214708154145,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2549718671835015,
+              "roc_auc": 0.6060512224131349,
+              "brier": 0.15031288623235065,
+              "rows": 1305003,
+              "positives": 240580
+            },
+            "B3": {
+              "pr_auc": 0.7192934453826194,
+              "precision_at_recall_0_5": 0.755827835375432,
+              "recall_at_precision_0_5": 0.8370562806550835,
+              "lift_over_prevalence": 3.9017379005098283,
+              "roc_auc": 0.8983705117860616,
+              "brier": 0.08967373586978789,
+              "rows": 1305003,
+              "positives": 240580,
+              "coefficients": [
+                -2.20091074206487,
+                -3.5786337216673543,
+                1.0222722388983325,
+                0.1912509790283183
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.18485324073493486,
+            "prevalence_test": 0.18435206662360162
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.11539553801028789,
+            "prevalence_test": 0.18435206662360162,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 9166782,
+          "rows_test": 218338,
+          "positives_train": 2060285,
+          "positives_test": 34355,
+          "prevalence_train": 0.2247555358030768,
+          "prevalence_test": 0.15734778187947127,
+          "models": {
+            "B0": {
+              "pr_auc": 0.15734778187947127,
+              "precision_at_recall_0_5": 0.15734778187947127,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.13713326270610696,
+              "rows": 218338,
+              "positives": 34355
+            },
+            "B1": {
+              "pr_auc": 0.8189663946564096,
+              "precision_at_recall_0_5": 0.8924563591022444,
+              "recall_at_precision_0_5": 0.9103478387425411,
+              "lift_over_prevalence": 5.204816902241047,
+              "roc_auc": 0.9448613637826588,
+              "brier": null,
+              "rows": 218338,
+              "positives": 34355
+            },
+            "B2": {
+              "pr_auc": 0.22905054698245075,
+              "precision_at_recall_0_5": 0.24777533531603757,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.4556960654069084,
+              "roc_auc": 0.6642359582409799,
+              "brier": 0.1339165881287361,
+              "rows": 218338,
+              "positives": 34355
+            },
+            "B3": {
+              "pr_auc": 0.8207689876762422,
+              "precision_at_recall_0_5": 0.8871559159221195,
+              "recall_at_precision_0_5": 0.9207393392519284,
+              "lift_over_prevalence": 5.216273009205512,
+              "roc_auc": 0.9479168326563693,
+              "brier": 0.06325457830581982,
+              "rows": 218338,
+              "positives": 34355,
+              "coefficients": [
+                -2.2927538386523754,
+                -4.003336836012928,
+                1.2740430694138085,
+                0.1609163692012231
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.15686508952406883,
+            "prevalence_test": 0.15734778187947127
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.6457474879096112,
+            "prevalence_test": 0.15734778187947127,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1629128,
+          "rows_test": 1086665,
+          "positives_train": 390345,
+          "positives_test": 206225,
+          "prevalence_train": 0.23960364072068002,
+          "prevalence_test": 0.18977789843235957,
+          "models": {
+            "B0": {
+              "pr_auc": 0.18977789843235957,
+              "precision_at_recall_0_5": 0.18977789843235957,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.15624485229353868,
+              "rows": 1086665,
+              "positives": 206225
+            },
+            "B1": {
+              "pr_auc": 0.6898565861067311,
+              "precision_at_recall_0_5": 0.7146877187632125,
+              "recall_at_precision_0_5": 0.7890895866165596,
+              "lift_over_prevalence": 3.6350733768537804,
+              "roc_auc": 0.8798093896879462,
+              "brier": null,
+              "rows": 1086665,
+              "positives": 206225
+            },
+            "B2": {
+              "pr_auc": 0.23542447361003496,
+              "precision_at_recall_0_5": 0.24586855024279083,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.2405262970806092,
+              "roc_auc": 0.6049589869652616,
+              "brier": 0.158970940715736,
+              "rows": 1086665,
+              "positives": 206225
+            },
+            "B3": {
+              "pr_auc": 0.6991499204599945,
+              "precision_at_recall_0_5": 0.732102666051333,
+              "recall_at_precision_0_5": 0.8253121590495818,
+              "lift_over_prevalence": 3.684042906130003,
+              "roc_auc": 0.8886351433464545,
+              "brier": 0.09508421488004604,
+              "rows": 1086665,
+              "positives": 206225,
+              "coefficients": [
+                -1.8748852181301694,
+                -2.4630946610894644,
+                0.6196167135262405,
+                0.11135037360885405
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.18976984590352386,
+            "prevalence_test": 0.18977789843235957
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.2656048399289777,
+            "prevalence_test": 0.18977789843235957,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 76.73
+    },
+    {
+      "split": {
+        "name": "loso-2024",
+        "train_years": [
+          2019,
+          2020,
+          2021,
+          2022,
+          2023
+        ],
+        "test_year": 2024
+      },
+      "onset": false,
+      "seasons": [
+        {
+          "year": 2019,
+          "split": "train",
+          "rows": 2519921,
+          "positives": 407626.0
+        },
+        {
+          "year": 2020,
+          "split": "train",
+          "rows": 2728392,
+          "positives": 502313.0
+        },
+        {
+          "year": 2021,
+          "split": "train",
+          "rows": 2681558,
+          "positives": 609530.0
+        },
+        {
+          "year": 2022,
+          "split": "train",
+          "rows": 2589333,
+          "positives": 545571.0
+        },
+        {
+          "year": 2023,
+          "split": "train",
+          "rows": 1431931,
+          "positives": 217794.0
+        },
+        {
+          "year": 2024,
+          "split": "test",
+          "rows": 3026561,
+          "positives": 651140.0
+        }
+      ],
+      "rows_train": 11951135,
+      "rows_test": 3026561,
+      "positive_rate_train": 0.19101399155812399,
+      "positive_rate_test": 0.21514187224377768,
+      "week_index_test": [
+        {
+          "week_index": 2,
+          "rows": 145406,
+          "positive_rate": 0.3457766529579247
+        },
+        {
+          "week_index": 3,
+          "rows": 222040,
+          "positive_rate": 0.26932534678436315
+        },
+        {
+          "week_index": 4,
+          "rows": 221687,
+          "positive_rate": 0.1899028810891031
+        },
+        {
+          "week_index": 5,
+          "rows": 217498,
+          "positive_rate": 0.21220425015402442
+        },
+        {
+          "week_index": 6,
+          "rows": 216972,
+          "positive_rate": 0.24863115978098557
+        },
+        {
+          "week_index": 7,
+          "rows": 218492,
+          "positive_rate": 0.2522106072533548
+        },
+        {
+          "week_index": 8,
+          "rows": 222772,
+          "positive_rate": 0.21825004937783923
+        },
+        {
+          "week_index": 9,
+          "rows": 222541,
+          "positive_rate": 0.17248057661284888
+        },
+        {
+          "week_index": 10,
+          "rows": 180106,
+          "positive_rate": 0.1591007517795076
+        },
+        {
+          "week_index": 11,
+          "rows": 172287,
+          "positive_rate": 0.15344744525123777
+        },
+        {
+          "week_index": 12,
+          "rows": 173032,
+          "positive_rate": 0.1543818484442184
+        },
+        {
+          "week_index": 13,
+          "rows": 215662,
+          "positive_rate": 0.17584460869323293
+        },
+        {
+          "week_index": 14,
+          "rows": 220595,
+          "positive_rate": 0.20931571431809423
+        },
+        {
+          "week_index": 15,
+          "rows": 83554,
+          "positive_rate": 0.21195873327428968
+        },
+        {
+          "week_index": 16,
+          "rows": 79789,
+          "positive_rate": 0.22050658612089385
+        },
+        {
+          "week_index": 17,
+          "rows": 75900,
+          "positive_rate": 0.23795783926218708
+        },
+        {
+          "week_index": 18,
+          "rows": 138228,
+          "positive_rate": 0.2711823943050612
+        }
+      ],
+      "groups": {
+        "all/pooled": {
+          "rows_train": 11951135,
+          "rows_test": 3026561,
+          "positives_train": 2282834,
+          "positives_test": 651140,
+          "prevalence_train": 0.19101399155812399,
+          "prevalence_test": 0.21514187224377768,
+          "models": {
+            "B0": {
+              "pr_auc": 0.21514187224377768,
+              "precision_at_recall_0_5": 0.21514187224377768,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.16943800167760087,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B1": {
+              "pr_auc": 0.7468773403483555,
+              "precision_at_recall_0_5": 0.7896338875347134,
+              "recall_at_precision_0_5": 0.8739687317627546,
+              "lift_over_prevalence": 3.471557314989187,
+              "roc_auc": 0.8946536900959859,
+              "brier": null,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B2": {
+              "pr_auc": 0.2393068485628415,
+              "precision_at_recall_0_5": 0.24610974610974612,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1123211212538044,
+              "roc_auc": 0.5490378459887979,
+              "brier": 0.16874060759195023,
+              "rows": 3026561,
+              "positives": 651140
+            },
+            "B3": {
+              "pr_auc": 0.7578578953939352,
+              "precision_at_recall_0_5": 0.8073291210807702,
+              "recall_at_precision_0_5": 0.8840249408729306,
+              "lift_over_prevalence": 3.522595985105145,
+              "roc_auc": 0.9007011293931075,
+              "brier": 0.09371594779846325,
+              "rows": 3026561,
+              "positives": 651140,
+              "coefficients": [
+                -2.441659216000714,
+                -3.3261391814137453,
+                0.846319622948046,
+                0.16733568042429078
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.21544350016307154,
+            "prevalence_test": 0.21514187224377768
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.1532823147911707,
+            "prevalence_test": 0.21514187224377768,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/complete": {
+          "rows_train": 10235580,
+          "rows_test": 2218117,
+          "positives_train": 1953714,
+          "positives_test": 449023,
+          "prevalence_train": 0.19087477211843393,
+          "prevalence_test": 0.20243431703557568,
+          "models": {
+            "B0": {
+              "pr_auc": 0.20243431703557568,
+              "precision_at_recall_0_5": 0.20243431703557568,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1615882874006071,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B1": {
+              "pr_auc": 0.7711140549705557,
+              "precision_at_recall_0_5": 0.8228042013911794,
+              "recall_at_precision_0_5": 0.8867274059457979,
+              "lift_over_prevalence": 3.809206197163896,
+              "roc_auc": 0.9088338835317646,
+              "brier": null,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B2": {
+              "pr_auc": 0.22872417698314995,
+              "precision_at_recall_0_5": 0.23325567904194247,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1298685930950834,
+              "roc_auc": 0.5509752694257862,
+              "brier": 0.1609385724007529,
+              "rows": 2218117,
+              "positives": 449023
+            },
+            "B3": {
+              "pr_auc": 0.787517349071235,
+              "precision_at_recall_0_5": 0.8459095207773663,
+              "recall_at_precision_0_5": 0.8979205964950571,
+              "lift_over_prevalence": 3.8902364016316326,
+              "roc_auc": 0.9170718757848811,
+              "brier": 0.08323172285305042,
+              "rows": 2218117,
+              "positives": 449023,
+              "coefficients": [
+                -2.513675637534047,
+                -3.6464960804327853,
+                0.9915863477025402,
+                0.1755996977401074
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.20244670043592136,
+            "prevalence_test": 0.20243431703557568
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.25473648011267974,
+            "prevalence_test": 0.20243431703557568,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "all/incomplete": {
+          "rows_train": 1715555,
+          "rows_test": 808444,
+          "positives_train": 329120,
+          "positives_test": 202117,
+          "prevalence_train": 0.19184462171134123,
+          "prevalence_test": 0.250007421664333,
+          "models": {
+            "B0": {
+              "pr_auc": 0.250007421664333,
+              "precision_at_recall_0_5": 0.250007421664333,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.1908866220754571,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B1": {
+              "pr_auc": 0.7010730130200215,
+              "precision_at_recall_0_5": 0.7291571967647207,
+              "recall_at_precision_0_5": 0.8344523221698323,
+              "lift_over_prevalence": 2.8042088044942197,
+              "roc_auc": 0.8556045510899781,
+              "brier": null,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B2": {
+              "pr_auc": 0.2679758559089213,
+              "precision_at_recall_0_5": 0.2813200270988587,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0718716033506928,
+              "roc_auc": 0.5517633148591436,
+              "brier": 0.19271735574680224,
+              "rows": 808444,
+              "positives": 202117
+            },
+            "B3": {
+              "pr_auc": 0.7041800218919008,
+              "precision_at_recall_0_5": 0.7382281181059798,
+              "recall_at_precision_0_5": 0.828055037428816,
+              "lift_over_prevalence": 2.8166364710458587,
+              "roc_auc": 0.8522754086766364,
+              "brier": 0.12261009560511461,
+              "rows": 808444,
+              "positives": 202117,
+              "coefficients": [
+                -2.1577987233278026,
+                -2.2659957857267066,
+                0.5933551761735374,
+                0.08886457206875807
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.24943053450347208,
+            "prevalence_test": 0.250007421664333
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.16893600790265742,
+            "prevalence_test": 0.250007421664333,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/pooled": {
+          "rows_train": 9621859,
+          "rows_test": 2449220,
+          "positives_train": 2189031,
+          "positives_test": 614324,
+          "prevalence_train": 0.22750603599574676,
+          "prevalence_test": 0.2508243440768898,
+          "models": {
+            "B0": {
+              "pr_auc": 0.2508243440768898,
+              "precision_at_recall_0_5": 0.2508243440768898,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.18845523598705483,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B1": {
+              "pr_auc": 0.7589650408587866,
+              "precision_at_recall_0_5": 0.7948278048187222,
+              "recall_at_precision_0_5": 0.8933722270332919,
+              "lift_over_prevalence": 3.0258826895451865,
+              "roc_auc": 0.8905215356614354,
+              "brier": null,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B2": {
+              "pr_auc": 0.28198290434790957,
+              "precision_at_recall_0_5": 0.28872011346333015,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1242246257463278,
+              "roc_auc": 0.5571178828578381,
+              "brier": 0.18731576676680792,
+              "rows": 2449220,
+              "positives": 614324
+            },
+            "B3": {
+              "pr_auc": 0.772200213544559,
+              "precision_at_recall_0_5": 0.8145372580217449,
+              "recall_at_precision_0_5": 0.9058151724497171,
+              "lift_over_prevalence": 3.078649388624903,
+              "roc_auc": 0.8980513236006565,
+              "brier": 0.10504816355665662,
+              "rows": 2449220,
+              "positives": 614324,
+              "coefficients": [
+                -2.1362516988419236,
+                -3.396148673415285,
+                0.9210539874450205,
+                0.19031543344729596
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.25056554654332475,
+            "prevalence_test": 0.2508243440768898
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.572890537012549,
+            "prevalence_test": 0.2508243440768898,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/complete": {
+          "rows_train": 8235912,
+          "rows_test": 1792072,
+          "positives_train": 1872398,
+          "positives_test": 423460,
+          "prevalence_train": 0.22734555687336144,
+          "prevalence_test": 0.23629630952327807,
+          "models": {
+            "B0": {
+              "pr_auc": 0.23629630952327807,
+              "precision_at_recall_0_5": 0.23629630952327807,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.18054047960195727,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B1": {
+              "pr_auc": 0.785007948677131,
+              "precision_at_recall_0_5": 0.8292860611947548,
+              "recall_at_precision_0_5": 0.9070136494592169,
+              "lift_over_prevalence": 3.322133766121295,
+              "roc_auc": 0.9074263058290588,
+              "brier": null,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B2": {
+              "pr_auc": 0.2695665334302299,
+              "precision_at_recall_0_5": 0.27447038478166885,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.1407987453298516,
+              "roc_auc": 0.5562952466106643,
+              "brier": 0.1794272944485304,
+              "rows": 1792072,
+              "positives": 423460
+            },
+            "B3": {
+              "pr_auc": 0.8053226397664436,
+              "precision_at_recall_0_5": 0.8555335113927017,
+              "recall_at_precision_0_5": 0.9218910877060407,
+              "lift_over_prevalence": 3.408105024539579,
+              "roc_auc": 0.9175263879407797,
+              "brier": 0.09251483170535355,
+              "rows": 1792072,
+              "positives": 423460,
+              "coefficients": [
+                -2.2064124860074177,
+                -3.7630212178812816,
+                1.0985817632839672,
+                0.1987364467070045
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.23625436465513053,
+            "prevalence_test": 0.23629630952327807
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.3470452017642086,
+            "prevalence_test": 0.23629630952327807,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        },
+        "cropland/incomplete": {
+          "rows_train": 1385947,
+          "rows_test": 657148,
+          "positives_train": 316633,
+          "positives_test": 190864,
+          "prevalence_train": 0.22845967414338356,
+          "prevalence_test": 0.29044294435956586,
+          "models": {
+            "B0": {
+              "pr_auc": 0.29044294435956586,
+              "precision_at_recall_0_5": 0.29044294435956586,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0,
+              "roc_auc": 0.5,
+              "brier": 0.20992776621800427,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B1": {
+              "pr_auc": 0.7095867314347691,
+              "precision_at_recall_0_5": 0.7307309453437265,
+              "recall_at_precision_0_5": 0.850825718836449,
+              "lift_over_prevalence": 2.443119191617569,
+              "roc_auc": 0.8434953499449486,
+              "brier": null,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B2": {
+              "pr_auc": 0.3115725657088274,
+              "precision_at_recall_0_5": 0.3283909267301118,
+              "recall_at_precision_0_5": 0.0,
+              "lift_over_prevalence": 1.0727496458757257,
+              "roc_auc": 0.555720746871206,
+              "brier": 0.21218639738242367,
+              "rows": 657148,
+              "positives": 190864
+            },
+            "B3": {
+              "pr_auc": 0.7118404203771553,
+              "precision_at_recall_0_5": 0.7372739282596436,
+              "recall_at_precision_0_5": 0.8423851538268086,
+              "lift_over_prevalence": 2.4508786809980245,
+              "roc_auc": 0.8395544664836038,
+              "brier": 0.1391233692033581,
+              "rows": 657148,
+              "positives": 190864,
+              "coefficients": [
+                -1.8736577040184192,
+                -2.237870825689686,
+                0.6265502711838824,
+                0.08307490623826752
+              ]
+            }
+          },
+          "shuffled_control": {
+            "pr_auc": 0.2904021958745425,
+            "prevalence_test": 0.29044294435956586
+          },
+          "shuffled_control_real_test_labels": {
+            "pr_auc": 0.19035812574466573,
+            "prevalence_test": 0.29044294435956586,
+            "note": "not a valid null for a ranking model; diagnostic only"
+          }
+        }
+      },
+      "seconds": 79.81
+    }
+  ],
+  "seconds": 557.37,
+  "peak_rss_mb": 4393.8
+}

@@ -150,8 +150,11 @@ this repository's code.
 | **Copernicus Data Space Ecosystem** (documented fallback) | The same products if Earth Search is unavailable | Copernicus Sentinel data; a free account is required. Credentials go in `.env`, never in code |
 | **OpenStreetMap / administrative boundaries** | Not used | — |
 
-No third-party data is redistributed in this repository: `data/` is gitignored and every table is
-rebuilt by the pipeline. If you publish results derived from these sources, keep the credits above.
+No third-party data used to live in this repository: `data/` and `artifacts/` are gitignored and every
+table is rebuilt by the pipeline. The single exception is `demo_data/`, a small derived subset committed
+so the dashboard runs from a fresh clone; it is redistributed under the upstream licences above and
+carries their credits in [`demo_data/README.md`](demo_data/README.md). If you publish results derived
+from these sources, keep the credits above.
 
 ## Quick start
 
@@ -258,6 +261,19 @@ delta-crops-dashboard
 
 The dashboard reads `data/gold/**`, the health summary and `artifacts/phase7|8/**`; it never writes to
 the lake (a SELECT-only guard and a test that snapshots file mtimes enforce it).
+
+### Try it without a lake (committed demo sample)
+
+`demo_data/` is a committed 5 x 5 km, 2024-only subset of the same tables, prediction dump and metric
+JSONs (2.6 MB). One command, from the repository root:
+
+```bash
+scripts/run_demo.sh        # http://localhost:8501
+```
+
+The script sets `DELTA_CROPS_DATA`, `DELTA_CROPS_PREDICTIONS` and `DELTA_CROPS_ARTIFACTS` to the demo
+paths, so nothing else is needed, and the app shows a **"Demo sample: subset of cells, 2024 only"**
+banner. Attribution and rebuild instructions: [`demo_data/README.md`](demo_data/README.md).
 
 Paths can be overridden:
 
@@ -409,5 +425,6 @@ they fail — not skip — if selected without their inputs.
 ## Licence
 
 Code is released under the **MIT Licence** — see [`LICENSE`](LICENSE). The data keeps its own
-licences (see [Data sources and attribution](#data-sources-and-attribution)); no third-party data is
-redistributed here.
+licences (see [Data sources and attribution](#data-sources-and-attribution)); the only data in this
+repository is the small derived `demo_data/` subset, which keeps its upstream credits and licences
+(see [`demo_data/README.md`](demo_data/README.md)).

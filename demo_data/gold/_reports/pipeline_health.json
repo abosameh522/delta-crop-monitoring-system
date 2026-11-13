@@ -1,0 +1,497 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "quality": "quality_20261112T020141Z_47c4a558.json",
+    "gate": "weekly_gate_20261112T020232Z_65b82678.json"
+  },
+  "quality": {
+    "run_id": "20261112T020141Z_47c4a558",
+    "status": "passed",
+    "total_rows": 84235008,
+    "expected_ledger_dates": 352,
+    "schema_valid_files": 352,
+    "kept_cells": 239304,
+    "pandera_aggregate_validation": "passed",
+    "gap_definition": "Consecutive calendar days without NDVI IS NOT NULL, including season edges; 13-day violations use >=; info share uses >10; no gap is filled. No-ledger days are separated from NULL acquisition dates.",
+    "checks": [
+      {
+        "check": "missing_partition",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "Expected outputs are enumerated from ledger dates"
+      },
+      {
+        "check": "schema",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "Exact columns and Arrow dtypes, including physical date column"
+      },
+      {
+        "check": "ndvi_range",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB ndvi_invalid; Pandera requires zero"
+      },
+      {
+        "check": "duplicate_keys",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB duplicates; Pandera requires zero"
+      },
+      {
+        "check": "pixel_counts",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB bad_pixels; Pandera requires zero"
+      },
+      {
+        "check": "required_values",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB required_nulls; Pandera requires zero"
+      },
+      {
+        "check": "cell_keys",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB foreign_cells; Pandera requires zero"
+      },
+      {
+        "check": "date_partition",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB wrong_dates; Pandera requires zero"
+      },
+      {
+        "check": "row_count",
+        "severity": "critical",
+        "count": 0,
+        "status": "pass",
+        "message": "DuckDB row_error; Pandera requires zero"
+      },
+      {
+        "check": "masked_pct",
+        "severity": "alert",
+        "count": 11040653,
+        "status": "alert",
+        "message": "Rows above 50.0% masking; alert only"
+      },
+      {
+        "check": "null_rate",
+        "severity": "alert",
+        "count": 21,
+        "status": "alert",
+        "message": "Dual-tile dates only; absolute OR leave-one-out median+raw MAD"
+      },
+      {
+        "check": "gaps",
+        "severity": "alert",
+        "count": 33700,
+        "status": "alert",
+        "message": "all: longest gap >= 13 days; never filled"
+      },
+      {
+        "check": "gap_season",
+        "severity": "alert",
+        "count": 0,
+        "status": "pass",
+        "message": "all: >10.0% gap violations"
+      },
+      {
+        "check": "gaps",
+        "severity": "alert",
+        "count": 27862,
+        "status": "alert",
+        "message": "cropland: longest gap >= 13 days; never filled"
+      },
+      {
+        "check": "gap_season",
+        "severity": "alert",
+        "count": 0,
+        "status": "pass",
+        "message": "cropland: >10.0% gap violations"
+      },
+      {
+        "check": "acquisition_gaps",
+        "severity": "info",
+        "count": 566,
+        "status": "info",
+        "message": "Days without ledger acquisition: information only, not a pipeline failure"
+      }
+    ],
+    "seasons": [
+      {
+        "start": "2019-05-01",
+        "end": "2019-09-30",
+        "acquisition_dates": 59,
+        "aoi_no_acquisition_days": 94,
+        "aoi_longest_gap_days": 4,
+        "gap_count": 60,
+        "gap_alert_days": null
+      },
+      {
+        "start": "2020-05-01",
+        "end": "2020-09-30",
+        "acquisition_dates": 59,
+        "aoi_no_acquisition_days": 94,
+        "aoi_longest_gap_days": 7,
+        "gap_count": 58,
+        "gap_alert_days": null
+      },
+      {
+        "start": "2021-05-01",
+        "end": "2021-09-30",
+        "acquisition_dates": 60,
+        "aoi_no_acquisition_days": 93,
+        "aoi_longest_gap_days": 4,
+        "gap_count": 59,
+        "gap_alert_days": null
+      },
+      {
+        "start": "2022-05-01",
+        "end": "2022-09-30",
+        "acquisition_dates": 59,
+        "aoi_no_acquisition_days": 94,
+        "aoi_longest_gap_days": 4,
+        "gap_count": 58,
+        "gap_alert_days": null
+      },
+      {
+        "start": "2023-05-01",
+        "end": "2023-09-30",
+        "acquisition_dates": 56,
+        "aoi_no_acquisition_days": 97,
+        "aoi_longest_gap_days": 6,
+        "gap_count": 55,
+        "gap_alert_days": null
+      },
+      {
+        "start": "2024-05-01",
+        "end": "2024-09-30",
+        "acquisition_dates": 59,
+        "aoi_no_acquisition_days": 94,
+        "aoi_longest_gap_days": 7,
+        "gap_count": 60,
+        "gap_alert_days": null
+      }
+    ],
+    "dates": {
+      "n": 352,
+      "with_nulls": 344,
+      "max_null_rows": 217620,
+      "max_null_date": "2021-06-12",
+      "rows_min": 239304,
+      "rows_max": 239304
+    },
+    "config": {
+      "ndvi_min": -1.0,
+      "ndvi_max": 1.0,
+      "masked_pct_alert_threshold": 50.0,
+      "dual_tile_null_alert_pct": 50.0,
+      "null_mad_multiplier": 6.0,
+      "null_mad_min_other_dates": 5,
+      "gap_info_days": 10,
+      "gap_alert_days": 13,
+      "gap_season_alert_pct": 10.0,
+      "gap_statistics_days": [
+        10,
+        13,
+        21,
+        30
+      ],
+      "duckdb_threads": 4,
+      "duckdb_memory_limit": "2GB",
+      "max_failure_examples": 5,
+      "severity": {
+        "schema": "critical",
+        "ndvi_range": "critical",
+        "duplicate_keys": "critical",
+        "row_count": "critical",
+        "pixel_counts": "critical",
+        "missing_partition": "critical",
+        "date_partition": "critical",
+        "required_values": "critical",
+        "cell_keys": "critical",
+        "null_rate": "alert",
+        "masked_pct": "alert",
+        "gaps": "alert",
+        "gap_season": "alert",
+        "acquisition_gaps": "info"
+      },
+      "dn_floor_audit_dates": [
+        "2019-05-19",
+        "2019-06-18",
+        "2019-07-01",
+        "2019-07-03",
+        "2019-07-06",
+        "2019-08-12",
+        "2019-09-06",
+        "2023-05-23",
+        "2023-06-22",
+        "2023-07-02",
+        "2023-07-05",
+        "2023-07-07",
+        "2023-08-06",
+        "2023-09-05"
+      ]
+    }
+  },
+  "gate": {
+    "run_id": "20261112T020232Z_65b82678",
+    "status": "passed",
+    "gate_max_null_pct": 30.0,
+    "min_observations": 2,
+    "max_masked_pct": 50.0,
+    "weeks": [
+      19,
+      38
+    ],
+    "kept_cells": 239304,
+    "cropland_cells": 194778,
+    "failing": [],
+    "seasons": [
+      {
+        "year": 2019,
+        "weeks": 20,
+        "structural_weeks": 1,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 239304,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 4546776,
+            "nonstructural_null": 395868,
+            "nonstructural_null_pct": 8.71,
+            "insufficient_observations": 395410,
+            "too_cloudy": 458,
+            "total_cell_weeks": 4786080,
+            "total_null": 635172,
+            "total_null_pct": 13.27
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 194778,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 3700782,
+            "nonstructural_null": 324662,
+            "nonstructural_null_pct": 8.77,
+            "insufficient_observations": 324415,
+            "too_cloudy": 247,
+            "total_cell_weeks": 3895560,
+            "total_null": 519440,
+            "total_null_pct": 13.33
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 2034035,
+          "null_partial_masked": 270339,
+          "null_full_masked": 1763696,
+          "mean_masked_pct_on_null": 96.84
+        }
+      },
+      {
+        "year": 2020,
+        "weeks": 20,
+        "structural_weeks": 1,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 239304,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 4546776,
+            "nonstructural_null": 485485,
+            "nonstructural_null_pct": 10.68,
+            "insufficient_observations": 485362,
+            "too_cloudy": 123,
+            "total_cell_weeks": 4786080,
+            "total_null": 724789,
+            "total_null_pct": 15.14
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 194778,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 3700782,
+            "nonstructural_null": 404757,
+            "nonstructural_null_pct": 10.94,
+            "insufficient_observations": 404738,
+            "too_cloudy": 19,
+            "total_cell_weeks": 3895560,
+            "total_null": 599535,
+            "total_null_pct": 15.39
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 1181316,
+          "null_partial_masked": 153169,
+          "null_full_masked": 1028147,
+          "mean_masked_pct_on_null": 96.89
+        }
+      },
+      {
+        "year": 2021,
+        "weeks": 20,
+        "structural_weeks": 0,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 0,
+            "structural_share_pct": 0.0,
+            "nonstructural_cell_weeks": 4786080,
+            "nonstructural_null": 408525,
+            "nonstructural_null_pct": 8.54,
+            "insufficient_observations": 408368,
+            "too_cloudy": 157,
+            "total_cell_weeks": 4786080,
+            "total_null": 408525,
+            "total_null_pct": 8.54
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 0,
+            "structural_share_pct": 0.0,
+            "nonstructural_cell_weeks": 3895560,
+            "nonstructural_null": 337327,
+            "nonstructural_null_pct": 8.66,
+            "insufficient_observations": 337295,
+            "too_cloudy": 32,
+            "total_cell_weeks": 3895560,
+            "total_null": 337327,
+            "total_null_pct": 8.66
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 1423536,
+          "null_partial_masked": 190707,
+          "null_full_masked": 1232829,
+          "mean_masked_pct_on_null": 96.84
+        }
+      },
+      {
+        "year": 2022,
+        "weeks": 20,
+        "structural_weeks": 2,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 478608,
+            "structural_share_pct": 10.0,
+            "nonstructural_cell_weeks": 4307472,
+            "nonstructural_null": 518677,
+            "nonstructural_null_pct": 12.04,
+            "insufficient_observations": 517505,
+            "too_cloudy": 1172,
+            "total_cell_weeks": 4786080,
+            "total_null": 997285,
+            "total_null_pct": 20.84
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 389556,
+            "structural_share_pct": 10.0,
+            "nonstructural_cell_weeks": 3506004,
+            "nonstructural_null": 433412,
+            "nonstructural_null_pct": 12.36,
+            "insufficient_observations": 432491,
+            "too_cloudy": 921,
+            "total_cell_weeks": 3895560,
+            "total_null": 822968,
+            "total_null_pct": 21.13
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 1926424,
+          "null_partial_masked": 312231,
+          "null_full_masked": 1614193,
+          "mean_masked_pct_on_null": 96.16
+        }
+      },
+      {
+        "year": 2023,
+        "weeks": 20,
+        "structural_weeks": 3,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 717912,
+            "structural_share_pct": 15.0,
+            "nonstructural_cell_weeks": 4068168,
+            "nonstructural_null": 600116,
+            "nonstructural_null_pct": 14.75,
+            "insufficient_observations": 600074,
+            "too_cloudy": 42,
+            "total_cell_weeks": 4786080,
+            "total_null": 1318028,
+            "total_null_pct": 27.54
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 584334,
+            "structural_share_pct": 15.0,
+            "nonstructural_cell_weeks": 3311226,
+            "nonstructural_null": 497214,
+            "nonstructural_null_pct": 15.02,
+            "insufficient_observations": 497182,
+            "too_cloudy": 32,
+            "total_cell_weeks": 3895560,
+            "total_null": 1081548,
+            "total_null_pct": 27.76
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 1630737,
+          "null_partial_masked": 209751,
+          "null_full_masked": 1420986,
+          "mean_masked_pct_on_null": 96.95
+        }
+      },
+      {
+        "year": 2024,
+        "weeks": 20,
+        "structural_weeks": 1,
+        "populations": {
+          "all": {
+            "cells": 239304,
+            "structural_cell_weeks": 239304,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 4546776,
+            "nonstructural_null": 468108,
+            "nonstructural_null_pct": 10.3,
+            "insufficient_observations": 467956,
+            "too_cloudy": 152,
+            "total_cell_weeks": 4786080,
+            "total_null": 707412,
+            "total_null_pct": 14.78
+          },
+          "cropland": {
+            "cells": 194778,
+            "structural_cell_weeks": 194778,
+            "structural_share_pct": 5.0,
+            "nonstructural_cell_weeks": 3700782,
+            "nonstructural_null": 386932,
+            "nonstructural_null_pct": 10.46,
+            "insufficient_observations": 386911,
+            "too_cloudy": 21,
+            "total_cell_weeks": 3895560,
+            "total_null": 581710,
+            "total_null_pct": 14.93
+          }
+        },
+        "null_cell_dates": {
+          "null_cell_dates": 1659210,
+          "null_partial_masked": 177986,
+          "null_full_masked": 1481224,
+          "mean_masked_pct_on_null": 97.46
+        }
+      }
+    ]
+  }
+}
