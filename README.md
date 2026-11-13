@@ -24,6 +24,11 @@ by 0.0008 (S3), 0.0014 (S4) and 0.0140 (S5). P@R.5 and Brier pass. No heatwave e
 > Stress is predictable, but the headline model **misses the pre-registered PR-AUC bar by 0.0008**
 > and **weather adds no skill**. Try it with no data at all: `scripts/run_demo.sh`.
 
+![The four dashboard pages on the committed demo sample](docs/images/demo.gif)
+
+Four pages of the dashboard running on `demo_data/` (a 5 × 5 km, 2024-only subset of the same Gold
+tables): weekly NDVI map, NDVI against temperature, model predictions, and the latest quality report.
+
 ## Contents
 
 1. [Results](#results)
