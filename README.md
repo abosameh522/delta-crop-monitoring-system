@@ -34,17 +34,18 @@ tables): weekly NDVI map, NDVI against temperature, model predictions, and the l
 1. [Results](#results)
 2. [Screenshots](#screenshots)
 3. [Architecture](#architecture)
-4. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
-5. [Data sources and attribution](#data-sources-and-attribution)
-6. [Quick start](#quick-start)
-7. [Get a data lake](#get-a-data-lake)
-8. [Run the dashboard](#run-the-dashboard)
-9. [Orchestration and Docker Compose](#orchestration-and-docker-compose)
-10. [Limitations](#limitations)
-11. [Future work](#future-work)
-12. [Repository layout](#repository-layout)
-13. [Tests](#tests)
-14. [Licence](#licence)
+4. [Stack](#stack)
+5. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+6. [Data sources and attribution](#data-sources-and-attribution)
+7. [Quick start](#quick-start)
+8. [Get a data lake](#get-a-data-lake)
+9. [Run the dashboard](#run-the-dashboard)
+10. [Orchestration and Docker Compose](#orchestration-and-docker-compose)
+11. [Limitations](#limitations)
+12. [Future work](#future-work)
+13. [Repository layout](#repository-layout)
+14. [Tests](#tests)
+15. [Licence](#licence)
 
 ## Results
 
@@ -127,6 +128,20 @@ in [`PROJECT.md`](PROJECT.md) §3. Two implementation details worth knowing:
 - **The anomaly is a raw difference, not a z-score.** With 3–4 baseline years per cell-week the
   z-score has unusable tails (p1 = −8.2, p99 = +7.5), so it is never presented as stress detection
   (D-046).
+
+## Stack
+
+| Layer | Technology | Role in this project |
+| --- | --- | --- |
+| Orchestration | Prefect 3 | One DAG (ingest → Silver → quality → Gold), 5-day schedule, retries, log-based failure alert, idempotent tasks |
+| Lakehouse | Parquet + PyArrow | Bronze / Silver / Gold layering, partitioned by `year=/month=` |
+| Query engine | DuckDB | Answers Gold queries over Parquet in ~1 s; runs the aggregate side of the quality gate |
+| Data quality | Pandera + DuckDB | Schema and aggregate checks between every layer, exiting non-zero on a critical failure |
+| Imagery | rasterio, pystac-client | Windowed COG reads and STAC search against Earth Search |
+| Modeling | XGBoost | Stress models with hand-built logistic baselines and per-campaign frozen bars |
+| Serving | Streamlit + Plotly | Read-only dashboard over the Gold layer |
+| Packaging | Docker, Docker Compose | Prefect server, orchestrator, and a separate dashboard stage |
+| Tooling | uv, pytest | Reproducible envs and 231 tests passing on a fresh clone |
 
 ## Design decisions and trade-offs
 
